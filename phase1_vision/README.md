@@ -7,7 +7,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 ---
 
-## Current status: Phase 4 of 11
+## Current status: Phase 5 of 11
 
 - [x] **Phase 1 - Real-time vision pipeline**
   Live object detection (YOLOv8n) and multi-object tracking on webcam feed, running in real time on CPU.
@@ -20,7 +20,8 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 - [x] **Phase 4 - IoT sensor fusion**
   Simulated temperature/smoke/gas sensor stream combined with live camera fire/smoke detection into a single fused risk score (NORMAL / ELEVATED / HIGH / CRITICAL). Demonstrates multimodal reasoning: a single signal raises moderate concern, but agreement between both modalities produces a much higher, more confident risk assessment.
 
-- [ ] Phase 5 - Predictive risk and anomaly detection
+- [x] **Phase 5 - Predictive risk and anomaly detection**
+  Rolling statistical anomaly detector (z-score based) flags unusual sensor readings relative to recent history. Linear trend predictor classifies risk trajectory (STABLE/RISING/RISING_FAST/FALLING) and forecasts the next value. Combined into a full live monitor alongside camera detection and sensor fusion. Sensor simulator rewritten with gradual value ramping and cooldown periods to model realistic physical behavior instead of instant jumps.
 - [ ] Phase 6 - Route optimization for evacuation
 - [ ] Phase 7 - Drone-based aerial intelligence
 - [ ] Phase 8 - NLP for emergency reports/calls
@@ -87,10 +88,15 @@ AegisAI/
   phase1_vision/          # Detection, tracking, crowd counting, fall detection
   phase3_fire_smoke/      # Custom fire/smoke model training pipeline
   phase4_sensor_fusion/   # Sensor simulation + multimodal risk fusion engine
+  phase5_prediction/      # Anomaly detection, trend prediction, full live monitor
 
 ---
 
 ## Why this project
 
 Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
+
+
+
+
 
