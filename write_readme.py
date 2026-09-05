@@ -1,4 +1,4 @@
-# AegisAI
+﻿content = """# AegisAI
 ### Autonomous Multimodal Emergency Intelligence & Disaster Response Platform
 
 A real-time AI system for emergency detection, risk prediction, and disaster response - built in phases, starting from core computer vision and scaling toward a full multimodal intelligence platform (sensor fusion, predictive risk modeling, route optimization, and LLM-assisted decision support).
@@ -42,3 +42,9 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 ## Why this project
 
 Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
+"""
+
+with open("phase1_vision/README.md", "w", encoding="utf-8") as f:
+    f.write(content)
+
+print("README written successfully")
