@@ -7,7 +7,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 ---
 
-## Current status: Phase 5 of 11
+## Current status: Phase 6 of 11
 
 - [x] **Phase 1 - Real-time vision pipeline**
   Live object detection (YOLOv8n) and multi-object tracking on webcam feed, running in real time on CPU.
@@ -22,7 +22,8 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 - [x] **Phase 5 - Predictive risk and anomaly detection**
   Rolling statistical anomaly detector (z-score based) flags unusual sensor readings relative to recent history. Linear trend predictor classifies risk trajectory (STABLE/RISING/RISING_FAST/FALLING) and forecasts the next value. Combined into a full live monitor alongside camera detection and sensor fusion. Sensor simulator rewritten with gradual value ramping and cooldown periods to model realistic physical behavior instead of instant jumps.
-- [ ] Phase 6 - Route optimization for evacuation
+- [x] **Phase 6 - Route optimization for evacuation**
+  Graph-based building model (rooms, corridors, exits) with Dijkstra shortest-path evacuation routing via NetworkX. Validated dynamic rerouting when paths are blocked, including correct detection of fully isolated/unreachable rooms. Integrated with Phase 3's fire detection model: camera-detected fire in a monitored zone automatically blocks the corresponding graph edges and triggers live rerouting - demonstrating a working end-to-end pipeline from computer vision to decision-making.
 - [ ] Phase 7 - Drone-based aerial intelligence
 - [ ] Phase 8 - NLP for emergency reports/calls
 - [ ] Phase 9 - LLM-assisted command center
@@ -36,6 +37,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 - **Computer Vision:** YOLOv8 (Ultralytics), OpenCV
 - **Custom Model Training:** Roboflow (dataset), Ultralytics CLI
 - **Sensor Simulation / Fusion Logic:** Python
+- **Graph Algorithms / Route Optimization:** NetworkX, Matplotlib
 - **Language:** Python 3.11
 - **Runtime:** CPU-only inference and training (no GPU required)
 
@@ -64,6 +66,13 @@ python sensor_simulator.py
 python fusion_engine.py
 python live_fusion_monitor.py
 
+### Phase 6 - Route optimization (phase6_route_optimization/)
+Requires the trained model from Phase 3 copied in as fire_smoke_model.pt
+pip install networkx matplotlib ultralytics opencv-python
+python building_graph.py
+python route_finder.py
+python integrated_monitor.py
+
 ---
 
 ## Model Weights
@@ -89,12 +98,15 @@ AegisAI/
   phase3_fire_smoke/      # Custom fire/smoke model training pipeline
   phase4_sensor_fusion/   # Sensor simulation + multimodal risk fusion engine
   phase5_prediction/      # Anomaly detection, trend prediction, full live monitor
+  phase6_route_optimization/  # Graph-based evacuation routing, integrated with fire detection
 
 ---
 
 ## Why this project
 
 Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
+
+
 
 
 
