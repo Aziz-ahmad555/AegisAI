@@ -7,7 +7,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 ---
 
-## Current status: Phase 8 of 11
+## Current status: Phase 9 of 11
 
 - [x] **Phase 1 - Real-time vision pipeline**
   Live object detection (YOLOv8n) and multi-object tracking on webcam feed, running in real time on CPU.
@@ -28,7 +28,8 @@ Inspired by how real-world smart-city and campus command centers monitor and res
   Custom-trained YOLOv8n model (30 epochs, CPU-only) on the SARD (Search and Rescue Drone) dataset - 1,980 aerial images of people in distress-relevant poses (Running, Walking, laying_down, seated, stands). mAP50: 0.572, Precision: 0.784, Recall: 0.512. Tested on static aerial test images rather than live drone footage, since no physical drone hardware was available - a deliberate, honestly-scoped simulation of aerial search-and-rescue analysis. Distinguishing laying_down/seated poses from active movement directly supports identifying potentially injured or stranded individuals in disaster imagery.
 - [x] **Phase 8 - NLP for emergency reports/calls**
   Hybrid NLP pipeline combining spaCy's pretrained entity recognition with custom rule-based classification for emergency-specific concepts spaCy doesn't natively understand: event type (fire vs. possible-fire-smell distinction, medical, structural, trapped), severity assessment (including detection of reporter-downplayed language), people counts, and common indoor location vocabulary (kitchen, cafeteria, laboratory, etc.) that general-purpose NER misses. Interactive CLI analyzer included. Iteratively debugged real issues: an operator-precedence bug in number parsing, keyword collisions between event categories, and substring double-matching in location extraction.
-- [ ] Phase 9 - LLM-assisted command center
+- [x] **Phase 9 - LLM-assisted command center**
+  Claude (Anthropic API) wired with tool-use/function-calling to answer natural-language questions about live system state (active incidents, risk score, evacuation status, parsed reports) grounded in real data rather than hallucination. Includes a rule-based offline fallback that activates automatically on API errors (insufficient credits, no connection, missing key) so the tool degrades gracefully instead of crashing - a deliberate resilience pattern for a system with an external paid dependency.
 - [ ] Phase 10 - Digital twin and scenario simulation
 - [ ] Phase 11 - Multi-agent orchestration, MLOps and security hardening
 
@@ -41,6 +42,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 - **Sensor Simulation / Fusion Logic:** Python
 - **Graph Algorithms / Route Optimization:** NetworkX, Matplotlib
 - **NLP:** spaCy (pretrained NER) + custom rule-based classification
+- **LLM Integration:** Anthropic Claude API (tool-use/function-calling)
 - **Language:** Python 3.11
 - **Runtime:** CPU-only inference and training (no GPU required)
 
@@ -89,6 +91,11 @@ python -m spacy download en_core_web_sm
 python emergency_nlp.py
 python interactive_report_analyzer.py
 
+### Phase 9 - LLM command center (phase9_llm_command_center/)
+Requires an Anthropic API key set as environment variable ANTHROPIC_API_KEY. Falls back to an offline rule-based summary automatically if the key is missing or the API is unavailable.
+pip install anthropic
+python command_center.py
+
 ---
 
 ## Model Weights
@@ -117,12 +124,15 @@ AegisAI/
   phase6_route_optimization/  # Graph-based evacuation routing, integrated with fire detection
   phase7_drone_intelligence/  # Aerial search-and-rescue pose detection (SARD dataset)
   phase8_nlp_reports/     # Hybrid NLP pipeline for emergency report/call analysis
+  phase9_llm_command_center/  # Claude-powered Q&A over live system state, with offline fallback
 
 ---
 
 ## Why this project
 
 Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
+
+
 
 
 
