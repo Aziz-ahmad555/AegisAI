@@ -7,7 +7,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 ---
 
-## Current status: Phase 6 of 11
+## Current status: Phase 8 of 11
 
 - [x] **Phase 1 - Real-time vision pipeline**
   Live object detection (YOLOv8n) and multi-object tracking on webcam feed, running in real time on CPU.
@@ -24,8 +24,10 @@ Inspired by how real-world smart-city and campus command centers monitor and res
   Rolling statistical anomaly detector (z-score based) flags unusual sensor readings relative to recent history. Linear trend predictor classifies risk trajectory (STABLE/RISING/RISING_FAST/FALLING) and forecasts the next value. Combined into a full live monitor alongside camera detection and sensor fusion. Sensor simulator rewritten with gradual value ramping and cooldown periods to model realistic physical behavior instead of instant jumps.
 - [x] **Phase 6 - Route optimization for evacuation**
   Graph-based building model (rooms, corridors, exits) with Dijkstra shortest-path evacuation routing via NetworkX. Validated dynamic rerouting when paths are blocked, including correct detection of fully isolated/unreachable rooms. Integrated with Phase 3's fire detection model: camera-detected fire in a monitored zone automatically blocks the corresponding graph edges and triggers live rerouting - demonstrating a working end-to-end pipeline from computer vision to decision-making.
-- [ ] Phase 7 - Drone-based aerial intelligence
-- [ ] Phase 8 - NLP for emergency reports/calls
+- [x] **Phase 7 - Drone-based aerial intelligence**
+  Custom-trained YOLOv8n model (30 epochs, CPU-only) on the SARD (Search and Rescue Drone) dataset - 1,980 aerial images of people in distress-relevant poses (Running, Walking, laying_down, seated, stands). mAP50: 0.572, Precision: 0.784, Recall: 0.512. Tested on static aerial test images rather than live drone footage, since no physical drone hardware was available - a deliberate, honestly-scoped simulation of aerial search-and-rescue analysis. Distinguishing laying_down/seated poses from active movement directly supports identifying potentially injured or stranded individuals in disaster imagery.
+- [x] **Phase 8 - NLP for emergency reports/calls**
+  Hybrid NLP pipeline combining spaCy's pretrained entity recognition with custom rule-based classification for emergency-specific concepts spaCy doesn't natively understand: event type (fire vs. possible-fire-smell distinction, medical, structural, trapped), severity assessment (including detection of reporter-downplayed language), people counts, and common indoor location vocabulary (kitchen, cafeteria, laboratory, etc.) that general-purpose NER misses. Interactive CLI analyzer included. Iteratively debugged real issues: an operator-precedence bug in number parsing, keyword collisions between event categories, and substring double-matching in location extraction.
 - [ ] Phase 9 - LLM-assisted command center
 - [ ] Phase 10 - Digital twin and scenario simulation
 - [ ] Phase 11 - Multi-agent orchestration, MLOps and security hardening
@@ -38,6 +40,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 - **Custom Model Training:** Roboflow (dataset), Ultralytics CLI
 - **Sensor Simulation / Fusion Logic:** Python
 - **Graph Algorithms / Route Optimization:** NetworkX, Matplotlib
+- **NLP:** spaCy (pretrained NER) + custom rule-based classification
 - **Language:** Python 3.11
 - **Runtime:** CPU-only inference and training (no GPU required)
 
@@ -73,6 +76,19 @@ python building_graph.py
 python route_finder.py
 python integrated_monitor.py
 
+### Phase 7 - Drone aerial intelligence (phase7_drone_intelligence/)
+Model weights are not included in this repo.
+pip install ultralytics roboflow
+python download_dataset.py
+yolo task=detect mode=train model=yolov8n.pt data=Sard-4/data.yaml epochs=30 imgsz=416 batch=8 device=cpu
+python test_on_images.py
+
+### Phase 8 - NLP emergency reports (phase8_nlp_reports/)
+pip install spacy
+python -m spacy download en_core_web_sm
+python emergency_nlp.py
+python interactive_report_analyzer.py
+
 ---
 
 ## Model Weights
@@ -99,12 +115,18 @@ AegisAI/
   phase4_sensor_fusion/   # Sensor simulation + multimodal risk fusion engine
   phase5_prediction/      # Anomaly detection, trend prediction, full live monitor
   phase6_route_optimization/  # Graph-based evacuation routing, integrated with fire detection
+  phase7_drone_intelligence/  # Aerial search-and-rescue pose detection (SARD dataset)
+  phase8_nlp_reports/     # Hybrid NLP pipeline for emergency report/call analysis
 
 ---
 
 ## Why this project
 
 Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
+
+
+
+
 
 
 
