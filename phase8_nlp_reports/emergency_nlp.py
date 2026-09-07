@@ -4,7 +4,8 @@ import re
 nlp = spacy.load("en_core_web_sm")
 
 EVENT_KEYWORDS = {
-    "FIRE": ["fire", "smoke", "flame", "flames", "burning"],
+    "FIRE": ["fire", "flame", "flames", "burning", "visible smoke", "smoke coming from", "smoke billowing"],
+    "POSSIBLE_FIRE": ["smoke smell", "smell of smoke", "smells like smoke", "smoky smell"],
     "FLOOD": ["flood", "flooding", "water rising", "submerged"],
     "MEDICAL": ["injured", "unconscious", "bleeding", "heart attack", "someone collapsed", "person collapsed"],
     "STRUCTURAL": ["building has collapsed", "building collapsed", "cracked", "structural damage", "debris"],
@@ -13,9 +14,22 @@ EVENT_KEYWORDS = {
 
 SEVERITY_KEYWORDS = {
     "CRITICAL": ["trapped", "unconscious", "dying", "critical", "severe", "collapsed"],
-    "HIGH": ["injured", "bleeding", "smoke", "fire", "spreading"],
-    "MODERATE": ["concerned", "worried", "smell", "minor"],
+    "HIGH": ["injured", "bleeding", "fire", "spreading", "visible smoke", "smoke coming from"],
+    "MODERATE": ["concerned", "worried", "smell", "smoke smell"],
 }
+
+DOWNPLAY_PHRASES = [
+    "not urgent", "not major", "nothing major", "minor", "small",
+    "just want someone to check", "no rush", "not serious", "not a big deal"
+]
+
+# Ordered so longer/more specific words are checked first (e.g. "laboratory" before "lab")
+COMMON_ROOM_WORDS = [
+    "laboratory", "classroom", "break room", "storage room", "parking lot",
+    "bathroom", "bedroom", "hallway", "corridor", "basement", "attic",
+    "garage", "lobby", "cafeteria", "stairwell", "elevator", "rooftop",
+    "roof", "warehouse", "kitchen", "office", "lab"
+]
 
 NUMBER_WORDS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -23,11 +37,25 @@ NUMBER_WORDS = {
 }
 
 
-def extract_locations(doc):
-    locations = []
-    for ent in doc.ents:
-        if ent.label_ in ("GPE", "FAC", "LOC"):
-            locations.append(ent.text)
+def extract_locations(doc, text):
+    locations = [ent.text for ent in doc.ents if ent.label_ in ("GPE", "FAC", "LOC")]
+
+    text_lower = text.lower()
+    matched_spans = []
+
+    for room in COMMON_ROOM_WORDS:
+        idx = text_lower.find(room)
+        if idx == -1:
+            continue
+        # skip if this match falls entirely inside an already-matched span
+        # (e.g. skip "lab" if "laboratory" already matched at an overlapping position)
+        overlap = any(start <= idx < end for start, end in matched_spans)
+        if overlap:
+            continue
+        matched_spans.append((idx, idx + len(room)))
+        if room not in [loc.lower() for loc in locations]:
+            locations.append(room)
+
     return locations
 
 
@@ -38,36 +66,46 @@ def extract_people_count(text):
     )
     if not match:
         return None
-
     num_str = match.group(1).lower()
-    if num_str.isdigit():
-        return int(num_str)
-    return NUMBER_WORDS.get(num_str)
+    return int(num_str) if num_str.isdigit() else NUMBER_WORDS.get(num_str)
 
 
 def detect_event_type(text):
     text_lower = text.lower()
     detected = []
-    for event_type, keywords in EVENT_KEYWORDS.items():
-        if any(kw in text_lower for kw in keywords):
+    has_possible_fire = any(kw in text_lower for kw in EVENT_KEYWORDS["POSSIBLE_FIRE"])
+    has_real_fire = any(kw in text_lower for kw in EVENT_KEYWORDS["FIRE"])
+
+    if has_real_fire:
+        detected.append("FIRE")
+    elif has_possible_fire:
+        detected.append("POSSIBLE_FIRE")
+
+    for event_type in ["FLOOD", "MEDICAL", "STRUCTURAL", "TRAPPED"]:
+        if any(kw in text_lower for kw in EVENT_KEYWORDS[event_type]):
             detected.append(event_type)
+
     return detected if detected else ["UNKNOWN"]
 
 
 def assess_severity(text):
     text_lower = text.lower()
-    for level, keywords in SEVERITY_KEYWORDS.items():
-        if any(kw in text_lower for kw in keywords):
+    is_downplayed = any(phrase in text_lower for phrase in DOWNPLAY_PHRASES)
+
+    for level in ["CRITICAL", "HIGH", "MODERATE"]:
+        if any(kw in text_lower for kw in SEVERITY_KEYWORDS[level]):
+            if is_downplayed and level in ("CRITICAL", "HIGH"):
+                return "MODERATE"
             return level
+
     return "LOW"
 
 
 def parse_emergency_report(text):
     doc = nlp(text)
-
     return {
         "original_text": text,
-        "locations": extract_locations(doc),
+        "locations": extract_locations(doc, text),
         "people_count": extract_people_count(text),
         "event_types": detect_event_type(text),
         "severity": assess_severity(text),
@@ -80,6 +118,7 @@ if __name__ == "__main__":
         "I see a small fire in the kitchen, nothing major, just want someone to check it out.",
         "The building has collapsed and there are people trapped under the debris near Main Street.",
         "Someone collapsed and is unconscious near the cafeteria entrance.",
+        "Minor smoke smell in the break room, not urgent.",
     ]
 
     for i, report in enumerate(test_reports, 1):
