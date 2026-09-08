@@ -1,0 +1,19 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>AegisAI Digital Twin</title>
+</head>
+<body>
+    <h1>AegisAI Digital Twin Dashboard</h1>
+    <p>Server is running. Full visualization coming next.</p>
+    <div id="status">Waiting for data...</div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        socket.on("state_update", (data) => {
+            document.getElementById("status").innerText = JSON.stringify(data, null, 2);
+        });
+    </script>
+</body>
+</html>
