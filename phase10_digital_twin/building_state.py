@@ -1,9 +1,14 @@
-﻿import networkx as nx
+import networkx as nx
 import time
 import threading
 
 
 class BuildingDigitalTwin:
+    """
+    Live, mutable representation of the building's state - the core
+    'digital twin' data model mirroring the real (or simulated) building.
+    """
+
     def __init__(self):
         self.graph = self._build_graph()
         self.zone_status = {node: "SAFE" for node in self.graph.nodes()}
@@ -70,25 +75,59 @@ class BuildingDigitalTwin:
                     blocked.append((u, v))
             return blocked
 
+    def _shortest_path_in(self, G_working, start):
+        best_path, best_len, best_exit = None, float("inf"), None
+        for exit_node in self.exits:
+            try:
+                length = nx.dijkstra_path_length(G_working, start, exit_node, weight="weight")
+                if length < best_len:
+                    best_len = length
+                    best_path = nx.dijkstra_path(G_working, start, exit_node, weight="weight")
+                    best_exit = exit_node
+            except nx.NetworkXNoPath:
+                continue
+        return best_path, (best_len if best_path else None), best_exit
+
     def compute_evacuation_route(self, start):
+        """
+        Computes the safest evacuation route from `start` to the nearest exit.
+
+        Design decision: if `start` itself is on fire, its own connecting edges
+        are still considered passable for this route (the occupant has no
+        alternative but to use their own door/exit), but the route is flagged
+        with `through_hazard: True` so operators know it involves leaving
+        through an active hazard zone. All *other* fire zones remain fully
+        blocked and cannot be routed through. This mirrors real evacuation
+        logic: you cannot choose not to use your only exit, but rescuers should
+        never route people through unrelated fire zones.
+        """
         with self.lock:
-            G_working = self.graph.copy()
-            for u, v in self.get_blocked_edges():
-                if G_working.has_edge(u, v):
-                    G_working.remove_edge(u, v)
+            blocked = self.get_blocked_edges()
 
-            best_path, best_len, best_exit = None, float("inf"), None
-            for exit_node in self.exits:
-                try:
-                    length = nx.dijkstra_path_length(G_working, start, exit_node, weight="weight")
-                    if length < best_len:
-                        best_len = length
-                        best_path = nx.dijkstra_path(G_working, start, exit_node, weight="weight")
-                        best_exit = exit_node
-                except nx.NetworkXNoPath:
+            # Strict pass: block every edge touching any fire zone.
+            G_strict = self.graph.copy()
+            for u, v in blocked:
+                if G_strict.has_edge(u, v):
+                    G_strict.remove_edge(u, v)
+
+            path, length, exit_node = self._shortest_path_in(G_strict, start)
+            if path is not None:
+                return {"path": path, "length": length, "exit": exit_node, "through_hazard": False}
+
+            # Relaxed pass: allow leaving via start's own edges even if start
+            # itself is on fire, but keep all other fire zones blocked.
+            G_relaxed = self.graph.copy()
+            for u, v in blocked:
+                if u == start or v == start:
                     continue
+                if G_relaxed.has_edge(u, v):
+                    G_relaxed.remove_edge(u, v)
 
-            return {"path": best_path, "length": best_len if best_path else None, "exit": best_exit}
+            path, length, exit_node = self._shortest_path_in(G_relaxed, start)
+            if path is not None:
+                return {"path": path, "length": length, "exit": exit_node, "through_hazard": True}
+
+            return {"path": None, "length": None, "exit": None, "through_hazard": False}
 
     def get_overall_risk(self):
         with self.lock:
@@ -116,24 +155,23 @@ class BuildingDigitalTwin:
 
 if __name__ == "__main__":
     twin = BuildingDigitalTwin()
-    print("Initial state - overall risk:", twin.get_overall_risk())
 
-    print("\n--- Scenario 1: Fire in CorridorB (Room101 has an alternate path) ---")
+    print("--- Scenario 1: Fire in CorridorB (Room101 unaffected) ---")
     twin.start_fire("CorridorB")
     route = twin.compute_evacuation_route("Room101")
-    print(f"Route from Room101: {route}")
-    print(f"Overall risk: {twin.get_overall_risk()}")
+    print(f"Route: {route}")
     twin.clear_zone("CorridorB")
 
-    print("\n--- Scenario 2: Fire in CorridorA (Room101's only connection - no alternate exists) ---")
+    print("\n--- Scenario 2: Fire in CorridorA (Room101's only connection) ---")
     twin.start_fire("CorridorA")
     route2 = twin.compute_evacuation_route("Room101")
-    print(f"Route from Room101: {route2}")
-    if route2["path"] is None:
-        print("  -> Correctly detected: Room101 has no alternate route in this layout")
-    print(f"Overall risk: {twin.get_overall_risk()}")
+    print(f"Route: {route2}")
     twin.clear_zone("CorridorA")
 
-    print("\n--- Final check: route restored after clearing ---")
-    route3 = twin.compute_evacuation_route("Room101")
-    print(f"Route from Room101: {route3}")
+    print("\n--- Scenario 3: Fire in Room103 itself (occupant must exit via own door) ---")
+    twin.start_fire("Room103")
+    route3 = twin.compute_evacuation_route("Room103")
+    print(f"Route: {route3}")
+    if route3.get("through_hazard"):
+        print("  -> Correctly flagged: this route requires leaving through the occupant's own fire zone")
+    twin.clear_zone("Room103")

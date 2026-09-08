@@ -1,19 +1,286 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <title>AegisAI Digital Twin</title>
+    <style>
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #58a6ff; margin-bottom: 4px; }
+        .subtitle { color: #8b949e; margin-bottom: 20px; }
+        .layout { display: flex; gap: 20px; }
+        .panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+        #graph-panel { flex: 2; }
+        #side-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+        .risk-display { font-size: 2.5em; font-weight: bold; }
+        .risk-normal { color: #3fb950; }
+        .risk-elevated { color: #d29922; }
+        .risk-high { color: #db6d28; }
+        .risk-critical { color: #f85149; }
+        .zone-controls button {
+            display: block; width: 100%; margin: 4px 0; padding: 8px;
+            background: #21262d; color: #e6edf3; border: 1px solid #30363d;
+            border-radius: 6px; cursor: pointer;
+        }
+        .zone-controls button:hover { background: #30363d; }
+        .fire-btn:hover { background: #6e1a1a; }
+        .clear-btn:hover { background: #1a5c2e; }
+        #event-log {
+            font-family: monospace; font-size: 0.85em; max-height: 200px;
+            overflow-y: auto; background: #0d1117; padding: 8px; border-radius: 6px;
+        }
+        svg { background: #0d1117; border-radius: 6px; }
+        .node-safe { fill: #238636; stroke: #3fb950; }
+        .node-fire { fill: #da3633; stroke: #f85149; }
+        .node-fire-pulse { animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        .edge-normal { stroke: #30363d; stroke-width: 2; }
+        .edge-blocked { stroke: #f85149; stroke-width: 3; stroke-dasharray: 5,5; }
+        .edge-route { stroke: #58a6ff; stroke-width: 4; }
+        .edge-route-hazard { stroke: #d29922; stroke-width: 4; stroke-dasharray: 3,3; }
+        .node-label { fill: #e6edf3; font-size: 11px; text-anchor: middle; }
+        select {
+            width: 100%; padding: 8px; margin-bottom: 8px;
+            background: #21262d; color: #e6edf3; border: 1px solid #30363d;
+            border-radius: 6px; font-size: 0.95em;
+        }
+        .route-btn {
+            width: 100%; padding: 8px; background: #1f6feb; color: white;
+            border: none; border-radius: 6px; cursor: pointer; font-size: 0.95em;
+        }
+        .route-btn:hover { background: #388bfd; }
+        .route-text {
+            font-family: monospace; font-size: 0.95em; line-height: 1.6;
+            background: #0d1117; padding: 10px; border-radius: 6px; margin-top: 8px;
+        }
+        .route-step { color: #58a6ff; }
+        .route-arrow { color: #6e7681; margin: 0 6px; }
+        .route-meta { color: #8b949e; font-size: 0.85em; margin-top: 6px; }
+        .hazard-warning {
+            background: #3d2a06; border: 1px solid #d29922; color: #d29922;
+            padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 0.85em;
+        }
+        .no-route-warning {
+            background: #3d0e0e; border: 1px solid #f85149; color: #ff9492;
+            padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 0.85em;
+        }
+    </style>
 </head>
 <body>
-    <h1>AegisAI Digital Twin Dashboard</h1>
-    <p>Server is running. Full visualization coming next.</p>
-    <div id="status">Waiting for data...</div>
+    <h1>AegisAI Digital Twin</h1>
+    <div class="subtitle">Live building state - Phase 10</div>
+
+    <div class="layout">
+        <div id="graph-panel" class="panel">
+            <svg id="building-svg" viewBox="-50 -50 700 500" width="100%" height="500"></svg>
+        </div>
+
+        <div id="side-panel">
+            <div class="panel">
+                <div>Overall Risk</div>
+                <div id="risk-value" class="risk-display risk-normal">0.0</div>
+                <div id="risk-level">NORMAL</div>
+            </div>
+
+            <div class="panel">
+                <div style="margin-bottom: 8px;"><strong>Simulate Fire</strong></div>
+                <div class="zone-controls" id="fire-controls"></div>
+            </div>
+
+            <div class="panel">
+                <div style="margin-bottom: 8px;"><strong>Evacuation Route</strong></div>
+                <select id="room-select"></select>
+                <button class="route-btn" onclick="requestRoute()">Find route</button>
+                <div id="route-display"></div>
+            </div>
+
+            <div class="panel">
+                <div style="margin-bottom: 8px;"><strong>Event Log</strong></div>
+                <div id="event-log"></div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        const socket = io();
-        socket.on("state_update", (data) => {
-            document.getElementById("status").innerText = JSON.stringify(data, null, 2);
+        var socket = io();
+        var SCALE = 80;
+        var currentState = null;
+        var currentRoute = null;
+        var currentThroughHazard = false;
+
+        var rooms = ["Room101", "Room102", "Room103", "Room201", "Room202"];
+        var zones = ["Room101", "Room102", "Room103", "CorridorA", "CorridorB",
+                     "Room201", "Room202", "Stairwell"];
+
+        function buildRoomSelect() {
+            var select = document.getElementById("room-select");
+            select.innerHTML = "";
+            rooms.forEach(function(room) {
+                var opt = document.createElement("option");
+                opt.value = room;
+                opt.innerText = room;
+                select.appendChild(opt);
+            });
+        }
+
+        function buildControls() {
+            var container = document.getElementById("fire-controls");
+            container.innerHTML = "";
+            zones.forEach(function(zone) {
+                var fireBtn = document.createElement("button");
+                fireBtn.className = "fire-btn";
+                fireBtn.innerText = "Start fire: " + zone;
+                fireBtn.onclick = function() { socket.emit("trigger_fire", { zone: zone }); };
+                container.appendChild(fireBtn);
+            });
+
+            var clearAllBtn = document.createElement("button");
+            clearAllBtn.className = "clear-btn";
+            clearAllBtn.innerText = "Clear all zones";
+            clearAllBtn.onclick = function() {
+                zones.forEach(function(zone) { socket.emit("clear_zone", { zone: zone }); });
+            };
+            container.appendChild(clearAllBtn);
+        }
+
+        function requestRoute() {
+            var selected = document.getElementById("room-select").value;
+            socket.emit("request_route", { start: selected });
+        }
+
+        function renderRouteDisplay(data) {
+            var display = document.getElementById("route-display");
+            var route = data.route;
+
+            if (!route.path) {
+                display.innerHTML =
+                    '<div class="no-route-warning">' +
+                    'No route available from ' + data.start + '. This zone is completely isolated - ' +
+                    'occupants cannot self-evacuate and require rescue.' +
+                    '</div>';
+                return;
+            }
+
+            var stepsHtml = route.path.map(function(step) {
+                return '<span class="route-step">' + step + '</span>';
+            }).join('<span class="route-arrow">&#8594;</span>');
+
+            var html = '<div class="route-text">' + stepsHtml + '</div>';
+            html += '<div class="route-meta">Total distance: ' + route.length + ' &middot; Exit: ' + route.exit + '</div>';
+
+            if (route.through_hazard) {
+                html += '<div class="hazard-warning">' +
+                    'Warning: this route requires exiting through the occupant\'s own active hazard zone ' +
+                    '(no alternate physical exit exists from ' + data.start + ').' +
+                    '</div>';
+            }
+
+            display.innerHTML = html;
+        }
+
+        socket.on("route_result", function(data) {
+            currentRoute = data.route.path;
+            currentThroughHazard = data.route.through_hazard;
+            renderRouteDisplay(data);
+            if (currentState) renderGraph(currentState);
         });
+
+        function riskClass(score) {
+            if (score < 20) return "risk-normal";
+            if (score < 45) return "risk-elevated";
+            if (score < 70) return "risk-high";
+            return "risk-critical";
+        }
+
+        function riskLevel(score) {
+            if (score < 20) return "NORMAL";
+            if (score < 45) return "ELEVATED";
+            if (score < 70) return "HIGH";
+            return "CRITICAL";
+        }
+
+        function renderGraph(state) {
+            var svg = document.getElementById("building-svg");
+            svg.innerHTML = "";
+
+            var nodeMap = {};
+            state.nodes.forEach(function(n) { nodeMap[n.id] = n; });
+
+            var blockedSet = new Set(state.blocked_edges.map(function(e) { return e[0] + "|" + e[1]; }));
+            var routeSet = new Set();
+            if (currentRoute) {
+                for (var i = 0; i < currentRoute.length - 1; i++) {
+                    routeSet.add(currentRoute[i] + "|" + currentRoute[i+1]);
+                    routeSet.add(currentRoute[i+1] + "|" + currentRoute[i]);
+                }
+            }
+
+            state.edges.forEach(function(e) {
+                var a = nodeMap[e.from], b = nodeMap[e.to];
+                var isBlocked = blockedSet.has(e.from + "|" + e.to) || blockedSet.has(e.to + "|" + e.from);
+                var isRoute = routeSet.has(e.from + "|" + e.to);
+
+                var edgeClass = "edge-normal";
+                if (isRoute) {
+                    edgeClass = currentThroughHazard ? "edge-route-hazard" : "edge-route";
+                } else if (isBlocked) {
+                    edgeClass = "edge-blocked";
+                }
+
+                var line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", a.x * SCALE);
+                line.setAttribute("y1", a.y * SCALE);
+                line.setAttribute("x2", b.x * SCALE);
+                line.setAttribute("y2", b.y * SCALE);
+                line.setAttribute("class", edgeClass);
+                svg.appendChild(line);
+            });
+
+            state.nodes.forEach(function(n) {
+                var isExit = n.id.indexOf("Exit") === 0;
+                var isStart = currentRoute && currentRoute.length > 0 && currentRoute[0] === n.id;
+
+                var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", n.x * SCALE);
+                circle.setAttribute("cy", n.y * SCALE);
+                circle.setAttribute("r", isExit ? 22 : 28);
+                circle.setAttribute("class", (n.status === "FIRE" ? "node-fire node-fire-pulse" : "node-safe"));
+                circle.setAttribute("stroke-width", isStart ? "4" : "2");
+                if (isStart) circle.setAttribute("stroke", "#58a6ff");
+                svg.appendChild(circle);
+
+                var label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                label.setAttribute("x", n.x * SCALE);
+                label.setAttribute("y", n.y * SCALE + 45);
+                label.setAttribute("class", "node-label");
+                label.textContent = n.id;
+                svg.appendChild(label);
+            });
+        }
+
+        socket.on("state_update", function(state) {
+            currentState = state;
+
+            var risk = state.overall_risk;
+            var riskEl = document.getElementById("risk-value");
+            riskEl.innerText = risk.toFixed(1);
+            riskEl.className = "risk-display " + riskClass(risk);
+            document.getElementById("risk-level").innerText = riskLevel(risk);
+
+            var logEl = document.getElementById("event-log");
+            logEl.innerHTML = state.event_log.map(function(e) { return "<div>" + e + "</div>"; }).join("");
+            logEl.scrollTop = logEl.scrollHeight;
+
+            renderGraph(state);
+        });
+
+        buildRoomSelect();
+        buildControls();
     </script>
 </body>
 </html>
