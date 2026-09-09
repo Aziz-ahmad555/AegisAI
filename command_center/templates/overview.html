@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h2>System Overview</h2>
+    <div class="desc">AegisAI - Autonomous Multimodal Emergency Intelligence &amp; Disaster Response Platform</div>
+</div>
+
+<style>
+    .phase-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+        margin-top: 8px;
+    }
+    .phase-card {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 16px;
+        transition: border-color 0.15s;
+    }
+    .phase-card:hover { border-color: #58a6ff; }
+    .phase-card .phase-num {
+        font-size: 0.72em;
+        color: #6e7681;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+    }
+    .phase-card h3 {
+        margin: 0 0 8px 0;
+        font-size: 1.05em;
+        color: #e6edf3;
+    }
+    .phase-card p {
+        color: #8b949e;
+        font-size: 0.85em;
+        line-height: 1.5;
+        margin: 8px 0;
+    }
+    .metric-row {
+        display: flex;
+        gap: 16px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #21262d;
+    }
+    .metric {
+        font-size: 0.8em;
+    }
+    .metric .val { color: #58a6ff; font-weight: 600; font-size: 1.1em; display: block; }
+    .metric .lbl { color: #6e7681; }
+    .stats-banner {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .stat-box {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 16px 20px;
+        flex: 1;
+        text-align: center;
+    }
+    .stat-box .num { font-size: 2em; font-weight: bold; color: #58a6ff; }
+    .stat-box .lbl { color: #8b949e; font-size: 0.85em; margin-top: 4px; }
+</style>
+
+<div class="stats-banner">
+    <div class="stat-box"><div class="num">11</div><div class="lbl">Phases Complete</div></div>
+    <div class="stat-box"><div class="num">2</div><div class="lbl">Custom-Trained Models</div></div>
+    <div class="stat-box"><div class="num">3</div><div class="lbl">AI Specialist Agents</div></div>
+    <div class="stat-box"><div class="num">0</div><div class="lbl">GPU Required</div></div>
+</div>
+
+<div class="phase-grid">
+    <div class="phase-card">
+        <div class="phase-num">Phase 1</div>
+        <h3>Real-Time Vision Pipeline <span class="badge badge-complete">Complete</span></h3>
+        <p>YOLOv8n object detection with multi-object tracking, running live on CPU-only hardware.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">Live</span><span class="lbl">Webcam Tracking</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 2</div>
+        <h3>Crowd &amp; Fall Detection <span class="badge badge-complete">Complete</span></h3>
+        <p>Live crowd counting and pose-based fall detection using keypoint confidence filtering to avoid false positives.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">6</span><span class="lbl">Pose Keypoints Tracked</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 3</div>
+        <h3>Fire/Smoke Detection <span class="badge badge-complete">Complete</span></h3>
+        <p>Custom-trained YOLOv8n model on a public fire/smoke dataset, 30 epochs, CPU-only training.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">0.576</span><span class="lbl">mAP50</span></div>
+            <div class="metric"><span class="val">2</span><span class="lbl">Classes</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 4</div>
+        <h3>IoT Sensor Fusion <span class="badge badge-complete">Complete</span></h3>
+        <p>Simulated temperature/smoke/gas sensors fused with camera detection into a single unified risk score.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">4</span><span class="lbl">Risk Levels</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 5</div>
+        <h3>Predictive Risk &amp; Anomaly Detection <span class="badge badge-complete">Complete</span></h3>
+        <p>Rolling z-score anomaly detection and linear trend forecasting on live sensor streams.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">Real-time</span><span class="lbl">Trend Forecasting</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 6</div>
+        <h3>Route Optimization <span class="badge badge-complete">Complete</span></h3>
+        <p>Dijkstra-based evacuation routing via NetworkX, with dynamic rerouting when fire blocks a path.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">10</span><span class="lbl">Building Zones</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 7</div>
+        <h3>Aerial Search &amp; Rescue <span class="badge badge-complete">Complete</span></h3>
+        <p>Custom-trained model on 1,980 aerial drone images, classifying human pose for distress detection.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">0.572</span><span class="lbl">mAP50</span></div>
+            <div class="metric"><span class="val">6</span><span class="lbl">Pose Classes</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 8</div>
+        <h3>NLP Emergency Reports <span class="badge badge-complete">Complete</span></h3>
+        <p>Hybrid spaCy + rule-based pipeline extracting event type, severity, location and people count from free text.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">5</span><span class="lbl">Event Categories</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 9</div>
+        <h3>LLM Command Center <span class="badge badge-complete">Complete</span></h3>
+        <p>Claude with tool-use grounds answers in live system data, with graceful offline fallback.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">4</span><span class="lbl">Live Data Tools</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 10</div>
+        <h3>Digital Twin Dashboard <span class="badge badge-complete">Complete</span></h3>
+        <p>Live WebSocket-driven building visualization with interactive fire simulation and routing.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">Live</span><span class="lbl">WebSocket Updates</span></div>
+        </div>
+    </div>
+
+    <div class="phase-card">
+        <div class="phase-num">Phase 11</div>
+        <h3>Multi-Agent &amp; Security <span class="badge badge-complete">Complete</span></h3>
+        <p>Specialist agents (Fire/Medical/Route) coordinated by an LLM Decision Agent, with authenticated access.</p>
+        <div class="metric-row">
+            <div class="metric"><span class="val">3</span><span class="lbl">Specialist Agents</span></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
