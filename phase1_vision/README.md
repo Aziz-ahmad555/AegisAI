@@ -7,7 +7,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 ---
 
-## Current status: Phase 9 of 11
+## Current status: Phase 10 of 11
 
 - [x] **Phase 1 - Real-time vision pipeline**
   Live object detection (YOLOv8n) and multi-object tracking on webcam feed, running in real time on CPU.
@@ -30,7 +30,8 @@ Inspired by how real-world smart-city and campus command centers monitor and res
   Hybrid NLP pipeline combining spaCy's pretrained entity recognition with custom rule-based classification for emergency-specific concepts spaCy doesn't natively understand: event type (fire vs. possible-fire-smell distinction, medical, structural, trapped), severity assessment (including detection of reporter-downplayed language), people counts, and common indoor location vocabulary (kitchen, cafeteria, laboratory, etc.) that general-purpose NER misses. Interactive CLI analyzer included. Iteratively debugged real issues: an operator-precedence bug in number parsing, keyword collisions between event categories, and substring double-matching in location extraction.
 - [x] **Phase 9 - LLM-assisted command center**
   Claude (Anthropic API) wired with tool-use/function-calling to answer natural-language questions about live system state (active incidents, risk score, evacuation status, parsed reports) grounded in real data rather than hallucination. Includes a rule-based offline fallback that activates automatically on API errors (insufficient credits, no connection, missing key) so the tool degrades gracefully instead of crashing - a deliberate resilience pattern for a system with an external paid dependency.
-- [ ] Phase 10 - Digital twin and scenario simulation
+- [x] **Phase 10 - Digital twin and scenario simulation**
+  Live web dashboard (Flask + Flask-SocketIO) rendering the building graph as an interactive SVG, updated in real time via WebSocket. Operators can trigger/clear simulated fires in any zone and query evacuation routes from any room, with the graph, risk score, and event log all updating live. Fixed a critical evacuation-logic flaw during development: originally, a room catching fire blocked its own only exit, incorrectly reporting occupants as fully trapped even when their own door was still physically usable. Redesigned the routing logic to distinguish three cases - a clean route avoiding all hazards, a route that must pass through the occupant's own hazard zone (flagged with a visible warning, since there is no alternate physical option), and genuine full isolation (correctly reported as requiring rescue). Also fixed a critical deadlock bug during backend development: a non-reentrant threading.Lock() caused the state snapshot method to hang indefinitely when it called another locked method from within an already-locked block - resolved by switching to threading.RLock().
 - [ ] Phase 11 - Multi-agent orchestration, MLOps and security hardening
 
 ---
@@ -43,6 +44,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 - **Graph Algorithms / Route Optimization:** NetworkX, Matplotlib
 - **NLP:** spaCy (pretrained NER) + custom rule-based classification
 - **LLM Integration:** Anthropic Claude API (tool-use/function-calling)
+- **Web Dashboard:** Flask, Flask-SocketIO (real-time WebSocket updates), vanilla JS/SVG frontend
 - **Language:** Python 3.11
 - **Runtime:** CPU-only inference and training (no GPU required)
 
@@ -96,6 +98,11 @@ Requires an Anthropic API key set as environment variable ANTHROPIC_API_KEY. Fal
 pip install anthropic
 python command_center.py
 
+### Phase 10 - Digital twin dashboard (phase10_digital_twin/)
+pip install flask flask-socketio networkx
+python server.py
+Then open http://127.0.0.1:5000 in a browser.
+
 ---
 
 ## Model Weights
@@ -125,12 +132,15 @@ AegisAI/
   phase7_drone_intelligence/  # Aerial search-and-rescue pose detection (SARD dataset)
   phase8_nlp_reports/     # Hybrid NLP pipeline for emergency report/call analysis
   phase9_llm_command_center/  # Claude-powered Q&A over live system state, with offline fallback
+  phase10_digital_twin/   # Live web dashboard - interactive building visualization with real-time routing
 
 ---
 
 ## Why this project
 
 Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
+
+
 
 
 
