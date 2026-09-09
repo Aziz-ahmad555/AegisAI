@@ -7,6 +7,7 @@ from flask_socketio import SocketIO, disconnect
 from building_state import BuildingDigitalTwin
 from emergency_nlp import parse_emergency_report
 from coordinator import ask_coordinator, get_client
+from sensor_state import SensorFusionState
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
@@ -17,6 +18,7 @@ OPERATOR_PASSWORD = os.environ.get("AEGISAI_PASSWORD", "aegisai2026")
 
 twin = BuildingDigitalTwin()
 llm_client = get_client()
+sensors = SensorFusionState()
 
 
 def login_required(f):
@@ -72,6 +74,12 @@ def chat_page():
     return render_template("chat.html", llm_status=llm_status)
 
 
+@app.route("/sensors")
+@login_required
+def sensors_page():
+    return render_template("sensors.html")
+
+
 @app.route("/api/analyze_report", methods=["POST"])
 @login_required
 def api_analyze_report():
@@ -102,12 +110,18 @@ def broadcast_twin_state():
     socketio.emit("state_update", snapshot)
 
 
+def broadcast_sensor_state():
+    snapshot = sensors.get_snapshot()
+    socketio.emit("sensor_update", snapshot)
+
+
 @socketio.on("connect")
 def handle_connect():
     if not session.get("logged_in"):
         disconnect()
         return
     broadcast_twin_state()
+    broadcast_sensor_state()
 
 
 @socketio.on("trigger_fire")
@@ -142,13 +156,24 @@ def handle_request_route(data):
     socketio.emit("route_result", {"start": start, "route": route})
 
 
+@socketio.on("trigger_sensor_event")
+def handle_trigger_sensor_event():
+    if not session.get("logged_in"):
+        disconnect()
+        return
+    sensors.trigger_event()
+
+
 def periodic_broadcast():
     while True:
         time.sleep(2)
         broadcast_twin_state()
+        broadcast_sensor_state()
 
 
 if __name__ == "__main__":
+    sensors.start_background_loop(interval_seconds=1.0)
+
     broadcaster = threading.Thread(target=periodic_broadcast, daemon=True)
     broadcaster.start()
 

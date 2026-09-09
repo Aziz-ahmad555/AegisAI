@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h2>Sensor Fusion &amp; Predictive Risk</h2>
+    <div class="desc">Phases 4 &amp; 5 - Simulated IoT sensors, multimodal risk fusion, anomaly detection, trend forecasting</div>
+</div>
+
+<style>
+    .sensor-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .sensor-box { text-align: center; }
+    .sensor-box .label { color: #8b949e; font-size: 0.85em; margin-bottom: 6px; }
+    .sensor-box .value { font-size: 1.8em; font-weight: bold; color: #e6edf3; }
+    .risk-section {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 16px;
+        align-items: stretch;
+    }
+    .risk-box { flex: 1; text-align: center; }
+    .risk-display { font-size: 2.4em; font-weight: bold; }
+    .risk-normal { color: #3fb950; }
+    .risk-elevated { color: #d29922; }
+    .risk-high { color: #db6d28; }
+    .risk-critical { color: #f85149; }
+    .trend-box { flex: 1; }
+    .trend-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.9em;
+        font-weight: 600;
+    }
+    .trend-STABLE { background: #0d3d1f; color: #3fb950; }
+    .trend-RISING { background: #3d2a06; color: #d29922; }
+    .trend-RISING_FAST { background: #3d0e0e; color: #f85149; }
+    .trend-FALLING, .trend-FALLING_FAST { background: #0d2a3d; color: #58a6ff; }
+    .anomaly-banner {
+        background: #3d0e0e;
+        border: 1px solid #f85149;
+        color: #ff9492;
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+        font-size: 0.9em;
+        display: none;
+    }
+    .trigger-btn {
+        padding: 10px 20px;
+        background: #6e1a1a;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9em;
+        margin-top: 12px;
+    }
+    .trigger-btn:hover { background: #8a2222; }
+    #chart-container { height: 220px; }
+</style>
+
+<div class="card" style="margin-bottom: 16px;">
+    <div class="sensor-grid">
+        <div class="sensor-box">
+            <div class="label">Temperature</div>
+            <div class="value" id="temp-value">--</div>
+        </div>
+        <div class="sensor-box">
+            <div class="label">Smoke Level</div>
+            <div class="value" id="smoke-value">--</div>
+        </div>
+        <div class="sensor-box">
+            <div class="label">Gas Level</div>
+            <div class="value" id="gas-value">--</div>
+        </div>
+    </div>
+</div>
+
+<div id="anomaly-banner" class="anomaly-banner">Anomaly detected in sensor data - readings deviate significantly from recent baseline.</div>
+
+<div class="risk-section">
+    <div class="card risk-box">
+        <div style="color:#8b949e; font-size:0.85em;">Fused Risk Score</div>
+        <div id="risk-value" class="risk-display risk-normal">0.0</div>
+        <div id="risk-level">NORMAL</div>
+    </div>
+    <div class="card trend-box">
+        <div style="color:#8b949e; font-size:0.85em; margin-bottom:8px;">Trend Forecast</div>
+        <span id="trend-badge" class="trend-badge trend-STABLE">STABLE</span>
+        <div style="margin-top:8px; color:#8b949e; font-size:0.85em;">Predicted next: <span id="predicted-next">--</span></div>
+        <button class="trigger-btn" onclick="triggerEvent()">Simulate Sensor Event</button>
+    </div>
+</div>
+
+<div class="card">
+    <div style="margin-bottom: 8px;"><strong>Risk Score - Last 30 Readings</strong></div>
+    <div id="chart-container">
+        <canvas id="risk-chart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    var socket = io();
+
+    var ctx = document.getElementById("risk-chart").getContext("2d");
+    var riskChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: [],
+            datasets: [{
+                label: "Risk Score",
+                data: [],
+                borderColor: "#58a6ff",
+                backgroundColor: "rgba(88, 166, 255, 0.1)",
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { display: false },
+                y: { min: 0, max: 100, ticks: { color: "#8b949e" }, grid: { color: "#21262d" } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    function riskClass(score) {
+        if (score < 20) return "risk-normal";
+        if (score < 45) return "risk-elevated";
+        if (score < 70) return "risk-high";
+        return "risk-critical";
+    }
+
+    function triggerEvent() {
+        socket.emit("trigger_sensor_event");
+    }
+
+    socket.on("sensor_update", function(data) {
+        document.getElementById("temp-value").innerText = data.reading.temperature + "C";
+        document.getElementById("smoke-value").innerText = data.reading.smoke_level;
+        document.getElementById("gas-value").innerText = data.reading.gas_level;
+
+        var riskEl = document.getElementById("risk-value");
+        riskEl.innerText = data.risk_score.toFixed(1);
+        riskEl.className = "risk-display " + riskClass(data.risk_score);
+        document.getElementById("risk-level").innerText = data.risk_level;
+
+        var trendBadge = document.getElementById("trend-badge");
+        trendBadge.innerText = data.trend.trend;
+        trendBadge.className = "trend-badge trend-" + data.trend.trend;
+        document.getElementById("predicted-next").innerText = data.trend.predicted_next;
+
+        document.getElementById("anomaly-banner").style.display = data.anomaly ? "block" : "none";
+
+        riskChart.data.labels = data.risk_history.map(function(_, i) { return i; });
+        riskChart.data.datasets[0].data = data.risk_history;
+        riskChart.update("none");
+    });
+</script>
+{% endblock %}
