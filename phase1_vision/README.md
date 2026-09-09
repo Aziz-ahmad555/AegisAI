@@ -7,7 +7,7 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 ---
 
-## Current status: Phase 10 of 11
+## Current status: Phase 11 of 11 - COMPLETE
 
 - [x] **Phase 1 - Real-time vision pipeline**
   Live object detection (YOLOv8n) and multi-object tracking on webcam feed, running in real time on CPU.
@@ -32,7 +32,8 @@ Inspired by how real-world smart-city and campus command centers monitor and res
   Claude (Anthropic API) wired with tool-use/function-calling to answer natural-language questions about live system state (active incidents, risk score, evacuation status, parsed reports) grounded in real data rather than hallucination. Includes a rule-based offline fallback that activates automatically on API errors (insufficient credits, no connection, missing key) so the tool degrades gracefully instead of crashing - a deliberate resilience pattern for a system with an external paid dependency.
 - [x] **Phase 10 - Digital twin and scenario simulation**
   Live web dashboard (Flask + Flask-SocketIO) rendering the building graph as an interactive SVG, updated in real time via WebSocket. Operators can trigger/clear simulated fires in any zone and query evacuation routes from any room, with the graph, risk score, and event log all updating live. Fixed a critical evacuation-logic flaw during development: originally, a room catching fire blocked its own only exit, incorrectly reporting occupants as fully trapped even when their own door was still physically usable. Redesigned the routing logic to distinguish three cases - a clean route avoiding all hazards, a route that must pass through the occupant's own hazard zone (flagged with a visible warning, since there is no alternate physical option), and genuine full isolation (correctly reported as requiring rescue). Also fixed a critical deadlock bug during backend development: a non-reentrant threading.Lock() caused the state snapshot method to hang indefinitely when it called another locked method from within an already-locked block - resolved by switching to threading.RLock().
-- [ ] Phase 11 - Multi-agent orchestration, MLOps and security hardening
+- [x] **Phase 11 - Multi-agent orchestration, MLOps and security hardening**
+  Multi-agent system with three specialist agents (Fire, Medical, Route) and an LLM-based Decision Agent coordinator that selectively consults only the agents relevant to each operator query, rather than always querying everything - includes a keyword-based offline routing fallback so selective consultation still works without API access. MLOps practices documented (model versioning, lightweight registry via recorded metrics, manually-identified failure modes, honest scoping of what a production deployment would still need). Added session-based authentication to the Phase 10 dashboard, protecting both HTTP routes and WebSocket actions, with credentials configurable via environment variables rather than hardcoded.
 
 ---
 
@@ -45,6 +46,8 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 - **NLP:** spaCy (pretrained NER) + custom rule-based classification
 - **LLM Integration:** Anthropic Claude API (tool-use/function-calling)
 - **Web Dashboard:** Flask, Flask-SocketIO (real-time WebSocket updates), vanilla JS/SVG frontend
+- **Multi-Agent Architecture:** Anthropic Claude API with specialist agent delegation
+- **Security:** Session-based authentication (Flask sessions), environment-variable credentials
 - **Language:** Python 3.11
 - **Runtime:** CPU-only inference and training (no GPU required)
 
@@ -101,7 +104,14 @@ python command_center.py
 ### Phase 10 - Digital twin dashboard (phase10_digital_twin/)
 pip install flask flask-socketio networkx
 python server.py
-Then open http://127.0.0.1:5000 in a browser.
+Then open http://127.0.0.1:5000 in a browser. Login required (default operator / aegisai2026, configurable via AEGISAI_USERNAME / AEGISAI_PASSWORD env vars).
+
+### Phase 11 - Multi-agent coordinator (phase11_multiagent_mlops_security/)
+Requires an Anthropic API key for full LLM-based routing; falls back to keyword-based offline routing otherwise.
+pip install anthropic
+python agents.py
+python coordinator.py
+See MLOPS.md in this folder for MLOps practices documentation.
 
 ---
 
@@ -133,12 +143,15 @@ AegisAI/
   phase8_nlp_reports/     # Hybrid NLP pipeline for emergency report/call analysis
   phase9_llm_command_center/  # Claude-powered Q&A over live system state, with offline fallback
   phase10_digital_twin/   # Live web dashboard - interactive building visualization with real-time routing
+  phase11_multiagent_mlops_security/  # Multi-agent coordinator, MLOps documentation, and dashboard security hardening
 
 ---
 
 ## Why this project
 
 Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
+
+
 
 
 
