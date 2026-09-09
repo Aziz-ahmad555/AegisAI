@@ -20,6 +20,14 @@ twin = BuildingDigitalTwin()
 llm_client = get_client()
 sensors = SensorFusionState()
 
+AERIAL_SAMPLES = [
+    {"file": "sample_1.jpg", "caption": "Aerial survey - person detected in open terrain"},
+    {"file": "sample_2.jpg", "caption": "Aerial survey - pose classification in progress"},
+    {"file": "sample_3.jpg", "caption": "Aerial survey - distress-relevant pose detection"},
+    {"file": "sample_4.jpg", "caption": "Aerial survey - search and rescue scenario"},
+    {"file": "sample_5.jpg", "caption": "Aerial survey - wooded terrain detection"},
+]
+
 
 def login_required(f):
     @wraps(f)
@@ -78,6 +86,12 @@ def chat_page():
 @login_required
 def sensors_page():
     return render_template("sensors.html")
+
+
+@app.route("/aerial")
+@login_required
+def aerial_page():
+    return render_template("aerial.html", samples=AERIAL_SAMPLES)
 
 
 @app.route("/api/analyze_report", methods=["POST"])

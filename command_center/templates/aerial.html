@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h2>Aerial Search &amp; Rescue Intelligence</h2>
+    <div class="desc">Phase 7 - Custom-trained YOLOv8n model on the SARD dataset for aerial pose detection</div>
+</div>
+
+<style>
+    .metrics-row {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .metric-box {
+        flex: 1;
+        text-align: center;
+    }
+    .metric-box .val { font-size: 1.8em; font-weight: bold; color: #58a6ff; }
+    .metric-box .lbl { color: #8b949e; font-size: 0.82em; margin-top: 4px; }
+    .class-tags { margin-top: 8px; }
+    .class-tag {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 10px;
+        font-size: 0.78em;
+        margin: 2px;
+        background: #1f3a5c;
+        color: #79c0ff;
+    }
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+    }
+    .gallery-item {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .gallery-item img {
+        width: 100%;
+        display: block;
+    }
+    .gallery-caption {
+        padding: 10px 12px;
+        font-size: 0.82em;
+        color: #8b949e;
+    }
+    .note-box {
+        background: #0d2a3d;
+        border: 1px solid #1f6feb;
+        color: #79c0ff;
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin-top: 16px;
+        font-size: 0.85em;
+    }
+</style>
+
+<div class="card" style="margin-bottom: 16px;">
+    <div class="metrics-row">
+        <div class="metric-box"><div class="val">0.572</div><div class="lbl">mAP50</div></div>
+        <div class="metric-box"><div class="val">0.784</div><div class="lbl">Precision</div></div>
+        <div class="metric-box"><div class="val">0.512</div><div class="lbl">Recall</div></div>
+        <div class="metric-box"><div class="val">1,980</div><div class="lbl">Training Images</div></div>
+    </div>
+    <div style="text-align: center; color: #8b949e; font-size: 0.85em;">Trained classes:</div>
+    <div class="class-tags" style="text-align: center;">
+        <span class="class-tag">Running</span>
+        <span class="class-tag">Walking</span>
+        <span class="class-tag">laying_down</span>
+        <span class="class-tag">seated</span>
+        <span class="class-tag">stands</span>
+        <span class="class-tag">not_defined</span>
+    </div>
+</div>
+
+<div class="gallery-grid">
+    {% for sample in samples %}
+    <div class="gallery-item">
+        <img src="{{ url_for('static', filename='aerial_results/' + sample.file) }}" alt="{{ sample.caption }}">
+        <div class="gallery-caption">{{ sample.caption }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="note-box">
+    These are real inference results from the custom-trained model on held-out test images from the SARD (Search and Rescue Drone) dataset - not live drone footage, since no physical drone hardware was used in this project. Distinguishing laying_down/seated poses from active movement (running/walking) directly supports identifying potentially injured or stranded individuals in disaster imagery.
+</div>
+{% endblock %}
