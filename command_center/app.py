@@ -2,12 +2,13 @@ import os
 import threading
 import time
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response
 from flask_socketio import SocketIO, disconnect
 from building_state import BuildingDigitalTwin
 from emergency_nlp import parse_emergency_report
 from coordinator import ask_coordinator, get_client
 from sensor_state import SensorFusionState
+from vision_stream import VisionStream
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
@@ -19,6 +20,7 @@ OPERATOR_PASSWORD = os.environ.get("AEGISAI_PASSWORD", "aegisai2026")
 twin = BuildingDigitalTwin()
 llm_client = get_client()
 sensors = SensorFusionState()
+vision = VisionStream()
 
 AERIAL_SAMPLES = [
     {"file": "sample_1.jpg", "caption": "Aerial survey - person detected in open terrain"},
@@ -92,6 +94,34 @@ def sensors_page():
 @login_required
 def aerial_page():
     return render_template("aerial.html", samples=AERIAL_SAMPLES)
+
+
+@app.route("/vision")
+@login_required
+def vision_page():
+    vision.start()
+    return render_template("vision.html")
+
+
+@app.route("/video_feed")
+@login_required
+def video_feed():
+    return Response(vision.generate_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.route("/api/vision_mode", methods=["POST"])
+@login_required
+def api_vision_mode():
+    data = request.get_json(force=True)
+    mode = data.get("mode", "tracking")
+    ok = vision.set_mode(mode)
+    return jsonify({"success": ok, "mode": mode})
+
+
+@app.route("/api/vision_info")
+@login_required
+def api_vision_info():
+    return jsonify(vision.get_info())
 
 
 @app.route("/api/analyze_report", methods=["POST"])

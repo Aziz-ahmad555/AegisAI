@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h2>Live Vision Pipeline</h2>
+    <div class="desc">Phases 1-3 - Real-time object detection, tracking, and fire/smoke recognition</div>
+</div>
+
+<style>
+    .vision-layout { display: flex; gap: 20px; }
+    #video-panel { flex: 3; }
+    #video-panel img {
+        width: 100%;
+        border-radius: 6px;
+        background: #000;
+        display: block;
+    }
+    #controls-panel { flex: 1; }
+    .mode-btn {
+        display: block;
+        width: 100%;
+        margin: 4px 0;
+        padding: 10px;
+        background: #21262d;
+        color: #e6edf3;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+    .mode-btn:hover { background: #30363d; }
+    .mode-btn.active {
+        background: #1f6feb;
+        border-color: #1f6feb;
+        color: white;
+    }
+    .mode-desc {
+        color: #8b949e;
+        font-size: 0.82em;
+        margin-top: 12px;
+        line-height: 1.5;
+    }
+    .status-line {
+        margin-top: 12px;
+        padding: 10px;
+        background: #0d1117;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 0.85em;
+        color: #58a6ff;
+    }
+</style>
+
+<div class="vision-layout">
+    <div id="video-panel" class="card">
+        <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Live vision feed">
+    </div>
+
+    <div id="controls-panel" class="card">
+        <div style="margin-bottom: 8px;"><strong>Detection Mode</strong></div>
+        <button class="mode-btn active" data-mode="tracking" onclick="setMode('tracking')">Object Detection &amp; Tracking</button>
+        <button class="mode-btn" data-mode="fire_smoke" onclick="setMode('fire_smoke')">Fire / Smoke Detection</button>
+        <button class="mode-btn" data-mode="fall_detection" onclick="setMode('fall_detection')">Fall Detection (Pose)</button>
+
+        <div class="mode-desc" id="mode-description">
+            YOLOv8n with multi-object tracking - assigns persistent IDs to detected objects across frames.
+        </div>
+
+        <div class="status-line" id="status-line">Loading...</div>
+    </div>
+</div>
+
+<script>
+    var descriptions = {
+        "tracking": "YOLOv8n with multi-object tracking - assigns persistent IDs to detected objects across frames.",
+        "fire_smoke": "Custom-trained YOLOv8n model (Phase 3, mAP50 0.576) detecting fire and smoke in real time.",
+        "fall_detection": "YOLOv8n-pose keypoint detection with confidence-filtered shoulder/hip geometry to flag possible falls."
+    };
+
+    function setMode(mode) {
+        fetch("/api/vision_mode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: mode })
+        }).then(function() {
+            document.querySelectorAll(".mode-btn").forEach(function(btn) {
+                btn.classList.toggle("active", btn.dataset.mode === mode);
+            });
+            document.getElementById("mode-description").innerText = descriptions[mode];
+        });
+    }
+
+    function pollStatus() {
+        fetch("/api/vision_info")
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                document.getElementById("status-line").innerText = data.detail || "Running";
+            })
+            .catch(function() {});
+    }
+
+    setInterval(pollStatus, 1000);
+    pollStatus();
+</script>
+{% endblock %}
