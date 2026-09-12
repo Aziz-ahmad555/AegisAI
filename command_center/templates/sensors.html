@@ -1,103 +1,77 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-header">
-    <h2>Sensor Fusion &amp; Predictive Risk</h2>
-    <div class="desc">Phases 4 &amp; 5 - Simulated IoT sensors, multimodal risk fusion, anomaly detection, trend forecasting</div>
+    <h2>Sensor Fusion</h2>
+    <div class="desc">Simulated telemetry combined with anomaly detection and trend forecasting into a single risk assessment.</div>
 </div>
 
 <style>
     .sensor-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        overflow: hidden;
         margin-bottom: 16px;
     }
-    .sensor-box { text-align: center; }
-    .sensor-box .label { color: #8b949e; font-size: 0.85em; margin-bottom: 6px; }
-    .sensor-box .value { font-size: 1.8em; font-weight: bold; color: #e6edf3; }
-    .risk-section {
-        display: flex;
-        gap: 16px;
-        margin-bottom: 16px;
-        align-items: stretch;
-    }
+    .sensor-box { background: var(--panel); text-align: center; padding: 18px; }
+    .sensor-box .label { color: var(--text-faint); font-size: 0.78em; margin-bottom: 8px; }
+    .sensor-box .value { font-family: 'IBM Plex Mono', monospace; font-size: 1.7em; font-weight: 600; color: var(--text); }
+    .risk-section { display: flex; gap: 16px; margin-bottom: 16px; align-items: stretch; }
     .risk-box { flex: 1; text-align: center; }
-    .risk-display { font-size: 2.4em; font-weight: bold; }
-    .risk-normal { color: #3fb950; }
-    .risk-elevated { color: #d29922; }
-    .risk-high { color: #db6d28; }
-    .risk-critical { color: #f85149; }
+    .risk-display { font-family: 'IBM Plex Mono', monospace; font-size: 2.2em; font-weight: 600; }
+    .risk-normal { color: var(--green); }
+    .risk-elevated { color: var(--amber); }
+    .risk-high { color: #d97a2e; }
+    .risk-critical { color: var(--red); }
     .trend-box { flex: 1; }
     .trend-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 0.9em;
-        font-weight: 600;
+        display: inline-block; padding: 3px 10px; border-radius: 3px;
+        font-size: 0.85em; font-weight: 600; font-family: 'IBM Plex Mono', monospace;
     }
-    .trend-STABLE { background: #0d3d1f; color: #3fb950; }
-    .trend-RISING { background: #3d2a06; color: #d29922; }
-    .trend-RISING_FAST { background: #3d0e0e; color: #f85149; }
-    .trend-FALLING, .trend-FALLING_FAST { background: #0d2a3d; color: #58a6ff; }
+    .trend-STABLE { background: #16281d; color: var(--green); }
+    .trend-RISING { background: #2e2308; color: var(--amber); }
+    .trend-RISING_FAST { background: #2e1414; color: var(--red); }
+    .trend-FALLING, .trend-FALLING_FAST { background: #0f2530; color: var(--cyan); }
     .anomaly-banner {
-        background: #3d0e0e;
-        border: 1px solid #f85149;
-        color: #ff9492;
-        padding: 10px 14px;
-        border-radius: 6px;
-        margin-bottom: 16px;
-        font-size: 0.9em;
-        display: none;
+        background: #2e1414; border: 1px solid var(--red); color: #ff8f8f;
+        padding: 10px 14px; border-radius: 4px; margin-bottom: 16px; font-size: 0.88em; display: none;
     }
     .trigger-btn {
-        padding: 10px 20px;
-        background: #6e1a1a;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.9em;
-        margin-top: 12px;
+        padding: 9px 18px; background: transparent; color: var(--red); border: 1px solid var(--red);
+        border-radius: 4px; cursor: pointer; font-size: 0.85em; margin-top: 12px; font-family: 'IBM Plex Sans', sans-serif;
     }
-    .trigger-btn:hover { background: #8a2222; }
-    #chart-container { height: 220px; }
+    .trigger-btn:hover { background: var(--red); color: #1a0505; }
+    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 4px; font-weight: 500; }
+    #chart-container { height: 200px; }
 </style>
 
-<div class="card" style="margin-bottom: 16px;">
-    <div class="sensor-grid">
-        <div class="sensor-box">
-            <div class="label">Temperature</div>
-            <div class="value" id="temp-value">--</div>
-        </div>
-        <div class="sensor-box">
-            <div class="label">Smoke Level</div>
-            <div class="value" id="smoke-value">--</div>
-        </div>
-        <div class="sensor-box">
-            <div class="label">Gas Level</div>
-            <div class="value" id="gas-value">--</div>
-        </div>
-    </div>
+<div class="sensor-grid">
+    <div class="sensor-box"><div class="label">TEMPERATURE</div><div class="value" id="temp-value">--</div></div>
+    <div class="sensor-box"><div class="label">SMOKE LEVEL</div><div class="value" id="smoke-value">--</div></div>
+    <div class="sensor-box"><div class="label">GAS LEVEL</div><div class="value" id="gas-value">--</div></div>
 </div>
 
-<div id="anomaly-banner" class="anomaly-banner">Anomaly detected in sensor data - readings deviate significantly from recent baseline.</div>
+<div id="anomaly-banner" class="anomaly-banner">Anomaly detected - readings deviate significantly from recent baseline.</div>
 
 <div class="risk-section">
     <div class="card risk-box">
-        <div style="color:#8b949e; font-size:0.85em;">Fused Risk Score</div>
+        <div class="panel-label">Fused risk score</div>
         <div id="risk-value" class="risk-display risk-normal">0.0</div>
-        <div id="risk-level">NORMAL</div>
+        <div id="risk-level" style="color: var(--text-dim); font-size: 0.85em;">NORMAL</div>
     </div>
     <div class="card trend-box">
-        <div style="color:#8b949e; font-size:0.85em; margin-bottom:8px;">Trend Forecast</div>
+        <div class="panel-label">Trend forecast</div>
         <span id="trend-badge" class="trend-badge trend-STABLE">STABLE</span>
-        <div style="margin-top:8px; color:#8b949e; font-size:0.85em;">Predicted next: <span id="predicted-next">--</span></div>
-        <button class="trigger-btn" onclick="triggerEvent()">Simulate Sensor Event</button>
+        <div style="margin-top:10px; color:var(--text-faint); font-size:0.82em;">Predicted next: <span id="predicted-next" class="mono">--</span></div>
+        <button class="trigger-btn" onclick="triggerEvent()">Simulate event</button>
     </div>
 </div>
 
 <div class="card">
-    <div style="margin-bottom: 8px;"><strong>Risk Score - Last 30 Readings</strong></div>
+    <div class="panel-label">Risk score history</div>
     <div id="chart-container">
         <canvas id="risk-chart"></canvas>
     </div>
@@ -116,8 +90,8 @@
             datasets: [{
                 label: "Risk Score",
                 data: [],
-                borderColor: "#58a6ff",
-                backgroundColor: "rgba(88, 166, 255, 0.1)",
+                borderColor: "#e8a33d",
+                backgroundColor: "rgba(232, 163, 61, 0.08)",
                 fill: true,
                 tension: 0.3,
                 pointRadius: 0,
@@ -128,7 +102,7 @@
             maintainAspectRatio: false,
             scales: {
                 x: { display: false },
-                y: { min: 0, max: 100, ticks: { color: "#8b949e" }, grid: { color: "#21262d" } }
+                y: { min: 0, max: 100, ticks: { color: "#8a8f96" }, grid: { color: "#262b31" } }
             },
             plugins: { legend: { display: false } }
         }

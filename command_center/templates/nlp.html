@@ -1,97 +1,69 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-header">
-    <h2>Emergency Report Analyzer</h2>
-    <div class="desc">Phase 8 - Hybrid spaCy + rule-based NLP for extracting structure from free-text reports</div>
+    <h2>Report Analyzer</h2>
+    <div class="desc">Extracts event type, severity, location and casualty count from free-text incident reports.</div>
 </div>
 
 <style>
-    .nlp-layout { display: flex; gap: 20px; }
+    .nlp-layout { display: flex; gap: 18px; }
     #input-panel { flex: 1; }
     #result-panel { flex: 1; }
+    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 8px; font-weight: 500; }
     textarea {
-        width: 100%;
-        height: 160px;
-        padding: 12px;
-        background: #0d1117;
-        color: #e6edf3;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        font-family: 'Segoe UI', Arial, sans-serif;
-        font-size: 0.95em;
-        resize: vertical;
-        box-sizing: border-box;
+        width: 100%; height: 150px; padding: 12px;
+        background: var(--base); color: var(--text); border: 1px solid var(--line);
+        border-radius: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.92em;
+        resize: vertical; box-sizing: border-box;
     }
+    textarea:focus { outline: none; border-color: var(--amber); }
     .analyze-btn {
-        margin-top: 10px;
-        padding: 10px 20px;
-        background: #1f6feb;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.95em;
+        margin-top: 10px; padding: 9px 18px; background: var(--amber); color: #1a1305;
+        border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: 600;
     }
-    .analyze-btn:hover { background: #388bfd; }
-    .examples { margin-top: 16px; }
+    .analyze-btn:hover { background: #f0ad4f; }
+    .examples { margin-top: 18px; }
+    .examples-label { color: var(--text-faint); font-size: 0.78em; margin-bottom: 6px; }
     .example-btn {
-        display: block;
-        width: 100%;
-        text-align: left;
-        margin: 4px 0;
-        padding: 8px 10px;
-        background: #21262d;
-        color: #8b949e;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.8em;
+        display: block; width: 100%; text-align: left; margin: 3px 0; padding: 8px 10px;
+        background: var(--panel-raised); color: var(--text-faint); border: 1px solid var(--line);
+        border-radius: 4px; cursor: pointer; font-size: 0.78em; font-family: 'IBM Plex Sans', sans-serif;
     }
-    .example-btn:hover { background: #30363d; color: #e6edf3; }
-    .result-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px 0;
-        border-bottom: 1px solid #21262d;
-    }
+    .example-btn:hover { color: var(--text); border-color: var(--amber); }
+    .result-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
     .result-row:last-child { border-bottom: none; }
-    .result-label { color: #8b949e; font-size: 0.85em; }
-    .result-value { color: #e6edf3; font-weight: 600; text-align: right; max-width: 60%; }
+    .result-label { color: var(--text-faint); font-size: 0.82em; }
+    .result-value { color: var(--text); font-weight: 500; text-align: right; max-width: 60%; font-size: 0.92em; }
     .tag {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 0.75em;
-        margin-left: 4px;
-        background: #1f3a5c;
-        color: #79c0ff;
+        display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.72em;
+        margin-left: 4px; background: #0f2530; color: var(--cyan); font-family: 'IBM Plex Mono', monospace;
     }
-    .severity-CRITICAL { color: #f85149; }
-    .severity-HIGH { color: #db6d28; }
-    .severity-MODERATE { color: #d29922; }
-    .severity-LOW { color: #3fb950; }
-    .placeholder-text { color: #6e7681; font-style: italic; }
+    .severity-CRITICAL { color: var(--red); }
+    .severity-HIGH { color: #d97a2e; }
+    .severity-MODERATE { color: var(--amber); }
+    .severity-LOW { color: var(--green); }
+    .placeholder-text { color: var(--text-faint); font-size: 0.88em; }
 </style>
 
 <div class="nlp-layout">
     <div id="input-panel" class="card">
-        <div style="margin-bottom: 8px;"><strong>Emergency Report Text</strong></div>
-        <textarea id="report-text" placeholder="Type or paste an emergency report here..."></textarea>
-        <button class="analyze-btn" onclick="analyzeReport()">Analyze Report</button>
+        <div class="panel-label">Incident report</div>
+        <textarea id="report-text" placeholder="Type or paste an emergency report..."></textarea>
+        <button class="analyze-btn" onclick="analyzeReport()">Analyze</button>
 
         <div class="examples">
-            <div style="color: #8b949e; font-size: 0.82em; margin-bottom: 6px;">Try an example:</div>
-            <button class="example-btn" onclick="useExample(0)">"There is smoke coming from the second floor near the laboratory in Building 4. Three people are trapped near Gate 4."</button>
-            <button class="example-btn" onclick="useExample(1)">"I see a small fire in the kitchen, nothing major, just want someone to check it out."</button>
-            <button class="example-btn" onclick="useExample(2)">"The building has collapsed and there are people trapped under the debris near Main Street."</button>
+            <div class="examples-label">SAMPLE REPORTS</div>
+            <button class="example-btn" onclick="useExample(0)">"Smoke coming from the second floor near the laboratory in Building 4. Three people trapped near Gate 4."</button>
+            <button class="example-btn" onclick="useExample(1)">"Small fire in the kitchen, nothing major, just want someone to check it out."</button>
+            <button class="example-btn" onclick="useExample(2)">"Building has collapsed, people trapped under debris near Main Street."</button>
             <button class="example-btn" onclick="useExample(3)">"Someone collapsed and is unconscious near the cafeteria entrance."</button>
         </div>
     </div>
 
     <div id="result-panel" class="card">
-        <div style="margin-bottom: 8px;"><strong>Structured Analysis</strong></div>
+        <div class="panel-label">Structured output</div>
         <div id="results">
-            <div class="placeholder-text">Enter a report and click Analyze to see the structured breakdown.</div>
+            <div class="placeholder-text">Enter a report and analyze to see the breakdown.</div>
         </div>
     </div>
 </div>
@@ -120,7 +92,7 @@
         })
         .then(function(res) { return res.json(); })
         .then(function(data) { renderResults(data); })
-        .catch(function(err) {
+        .catch(function() {
             document.getElementById("results").innerHTML = '<div class="placeholder-text">Error analyzing report.</div>';
         });
     }
@@ -134,10 +106,10 @@
         var peopleCount = data.people_count !== null ? data.people_count : "Not specified";
 
         var html = "";
-        html += '<div class="result-row"><div class="result-label">Event Type(s)</div><div class="result-value">' + eventTags + '</div></div>';
+        html += '<div class="result-row"><div class="result-label">Event type</div><div class="result-value">' + eventTags + '</div></div>';
         html += '<div class="result-row"><div class="result-label">Severity</div><div class="result-value severity-' + data.severity + '">' + data.severity + '</div></div>';
         html += '<div class="result-row"><div class="result-label">Locations</div><div class="result-value">' + locations + '</div></div>';
-        html += '<div class="result-row"><div class="result-label">People Count</div><div class="result-value">' + peopleCount + '</div></div>';
+        html += '<div class="result-row"><div class="result-label">People count</div><div class="result-value">' + peopleCount + '</div></div>';
 
         document.getElementById("results").innerHTML = html;
     }

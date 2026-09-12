@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h2>Digital Twin</h2>
+    <div class="desc">Live building state with graph-based evacuation routing. Simulate a hazard to see the system reroute in real time.</div>
+</div>
+
+<style>
+    .twin-layout { display: flex; gap: 18px; }
+    #graph-panel { flex: 2; }
+    #side-panel { flex: 1; display: flex; flex-direction: column; gap: 14px; }
+    .risk-display { font-family: 'IBM Plex Mono', monospace; font-size: 2.1em; font-weight: 600; }
+    .risk-normal { color: var(--green); }
+    .risk-elevated { color: var(--amber); }
+    .risk-high { color: #d97a2e; }
+    .risk-critical { color: var(--red); }
+    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 8px; font-weight: 500; }
+
+    .zone-controls button {
+        display: block; width: 100%; margin: 3px 0; padding: 8px 10px;
+        background: var(--panel-raised); color: var(--text); border: 1px solid var(--line);
+        border-radius: 4px; cursor: pointer; font-size: 0.85em; text-align: left;
+        font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .zone-controls button:hover { border-color: var(--red); color: var(--red); }
+    .clear-btn:hover { border-color: var(--green) !important; color: var(--green) !important; }
+
+    #event-log {
+        font-family: 'IBM Plex Mono', monospace; font-size: 0.78em; max-height: 150px;
+        overflow-y: auto; color: var(--text-dim); line-height: 1.6;
+    }
+    svg { background: var(--base); border-radius: 4px; }
+    .node-safe { fill: #1c3a26; stroke: var(--green); }
+    .node-fire { fill: #3d1414; stroke: var(--red); }
+    .node-fire-pulse { animation: pulse 1s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.55; } 100% { opacity: 1; } }
+    .edge-normal { stroke: var(--line); stroke-width: 2; }
+    .edge-blocked { stroke: var(--red); stroke-width: 3; stroke-dasharray: 5,5; }
+    .edge-route { stroke: var(--amber); stroke-width: 4; }
+    .edge-route-hazard { stroke: #d97a2e; stroke-width: 4; stroke-dasharray: 3,3; }
+    .node-label { fill: var(--text-dim); font-size: 11px; text-anchor: middle; font-family: 'IBM Plex Mono', monospace; }
+
+    select {
+        width: 100%; padding: 8px; margin-bottom: 8px;
+        background: var(--panel-raised); color: var(--text); border: 1px solid var(--line);
+        border-radius: 4px; font-size: 0.88em; font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .route-btn {
+        width: 100%; padding: 9px; background: var(--amber); color: #1a1305;
+        border: none; border-radius: 4px; cursor: pointer; font-size: 0.88em; font-weight: 600;
+    }
+    .route-btn:hover { background: #f0ad4f; }
+    .route-text {
+        font-family: 'IBM Plex Mono', monospace; font-size: 0.85em; line-height: 1.7;
+        background: var(--base); padding: 10px; border-radius: 4px; margin-top: 8px;
+    }
+    .route-step { color: var(--amber); }
+    .route-arrow { color: var(--text-faint); margin: 0 6px; }
+    .route-meta { color: var(--text-faint); font-size: 0.78em; margin-top: 6px; }
+    .hazard-warning {
+        background: #2e2308; border: 1px solid var(--amber); color: var(--amber);
+        padding: 8px 10px; border-radius: 4px; margin-top: 8px; font-size: 0.8em;
+    }
+    .no-route-warning {
+        background: #2e1414; border: 1px solid var(--red); color: #ff8f8f;
+        padding: 8px 10px; border-radius: 4px; margin-top: 8px; font-size: 0.8em;
+    }
+</style>
+
+<div class="twin-layout">
+    <div id="graph-panel" class="card">
+        <svg id="building-svg" viewBox="-50 -50 700 500" width="100%" height="460"></svg>
+    </div>
+
+    <div id="side-panel">
+        <div class="card">
+            <div class="panel-label">Overall risk</div>
+            <div id="risk-value" class="risk-display risk-normal">0.0</div>
+            <div id="risk-level" class="mono" style="color: var(--text-dim); font-size: 0.85em;">NORMAL</div>
+        </div>
+
+        <div class="card">
+            <div class="panel-label">Simulate hazard</div>
+            <div class="zone-controls" id="fire-controls"></div>
+        </div>
+
+        <div class="card">
+            <div class="panel-label">Evacuation route</div>
+            <select id="room-select"></select>
+            <button class="route-btn" onclick="requestRoute()">Find route</button>
+            <div id="route-display"></div>
+        </div>
+
+        <div class="card">
+            <div class="panel-label">Event log</div>
+            <div id="event-log"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    var socket = io();
+    var SCALE = 80;
+    var currentState = null;
+    var currentRoute = null;
+    var currentThroughHazard = false;
+
+    var rooms = ["Room101", "Room102", "Room103", "Room201", "Room202"];
+    var zones = ["Room101", "Room102", "Room103", "CorridorA", "CorridorB",
+                 "Room201", "Room202", "Stairwell"];
+
+    function buildRoomSelect() {
+        var select = document.getElementById("room-select");
+        select.innerHTML = "";
+        rooms.forEach(function(room) {
+            var opt = document.createElement("option");
+            opt.value = room;
+            opt.innerText = room;
+            select.appendChild(opt);
+        });
+    }
+
+    function buildControls() {
+        var container = document.getElementById("fire-controls");
+        container.innerHTML = "";
+        zones.forEach(function(zone) {
+            var fireBtn = document.createElement("button");
+            fireBtn.innerText = zone;
+            fireBtn.onclick = function() { socket.emit("trigger_fire", { zone: zone }); };
+            container.appendChild(fireBtn);
+        });
+
+        var clearAllBtn = document.createElement("button");
+        clearAllBtn.className = "clear-btn";
+        clearAllBtn.innerText = "Clear all zones";
+        clearAllBtn.onclick = function() {
+            zones.forEach(function(zone) { socket.emit("clear_zone", { zone: zone }); });
+        };
+        container.appendChild(clearAllBtn);
+    }
+
+    function requestRoute() {
+        var selected = document.getElementById("room-select").value;
+        socket.emit("request_route", { start: selected });
+    }
+
+    function renderRouteDisplay(data) {
+        var display = document.getElementById("route-display");
+        var route = data.route;
+
+        if (!route.path) {
+            display.innerHTML =
+                '<div class="no-route-warning">No route available from ' + data.start +
+                '. This zone is isolated - occupants require rescue.</div>';
+            return;
+        }
+
+        var stepsHtml = route.path.map(function(step) {
+            return '<span class="route-step">' + step + '</span>';
+        }).join('<span class="route-arrow">&#8594;</span>');
+
+        var html = '<div class="route-text">' + stepsHtml + '</div>';
+        html += '<div class="route-meta">Distance ' + route.length + ' &middot; Exit ' + route.exit + '</div>';
+
+        if (route.through_hazard) {
+            html += '<div class="hazard-warning">Route passes through the occupant\'s own hazard zone - no alternate exit exists.</div>';
+        }
+        display.innerHTML = html;
+    }
+
+    socket.on("route_result", function(data) {
+        currentRoute = data.route.path;
+        currentThroughHazard = data.route.through_hazard;
+        renderRouteDisplay(data);
+        if (currentState) renderGraph(currentState);
+    });
+
+    function riskClass(score) {
+        if (score < 20) return "risk-normal";
+        if (score < 45) return "risk-elevated";
+        if (score < 70) return "risk-high";
+        return "risk-critical";
+    }
+    function riskLevel(score) {
+        if (score < 20) return "NORMAL";
+        if (score < 45) return "ELEVATED";
+        if (score < 70) return "HIGH";
+        return "CRITICAL";
+    }
+
+    function renderGraph(state) {
+        var svg = document.getElementById("building-svg");
+        svg.innerHTML = "";
+        var nodeMap = {};
+        state.nodes.forEach(function(n) { nodeMap[n.id] = n; });
+
+        var blockedSet = new Set(state.blocked_edges.map(function(e) { return e[0] + "|" + e[1]; }));
+        var routeSet = new Set();
+        if (currentRoute) {
+            for (var i = 0; i < currentRoute.length - 1; i++) {
+                routeSet.add(currentRoute[i] + "|" + currentRoute[i+1]);
+                routeSet.add(currentRoute[i+1] + "|" + currentRoute[i]);
+            }
+        }
+
+        state.edges.forEach(function(e) {
+            var a = nodeMap[e.from], b = nodeMap[e.to];
+            var isBlocked = blockedSet.has(e.from + "|" + e.to) || blockedSet.has(e.to + "|" + e.from);
+            var isRoute = routeSet.has(e.from + "|" + e.to);
+            var edgeClass = "edge-normal";
+            if (isRoute) { edgeClass = currentThroughHazard ? "edge-route-hazard" : "edge-route"; }
+            else if (isBlocked) { edgeClass = "edge-blocked"; }
+
+            var line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", a.x * SCALE);
+            line.setAttribute("y1", a.y * SCALE);
+            line.setAttribute("x2", b.x * SCALE);
+            line.setAttribute("y2", b.y * SCALE);
+            line.setAttribute("class", edgeClass);
+            svg.appendChild(line);
+        });
+
+        state.nodes.forEach(function(n) {
+            var isExit = n.id.indexOf("Exit") === 0;
+            var isStart = currentRoute && currentRoute.length > 0 && currentRoute[0] === n.id;
+            var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", n.x * SCALE);
+            circle.setAttribute("cy", n.y * SCALE);
+            circle.setAttribute("r", isExit ? 20 : 26);
+            circle.setAttribute("class", (n.status === "FIRE" ? "node-fire node-fire-pulse" : "node-safe"));
+            circle.setAttribute("stroke-width", isStart ? "3" : "1.5");
+            if (isStart) circle.setAttribute("stroke", "#e8a33d");
+            svg.appendChild(circle);
+
+            var label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            label.setAttribute("x", n.x * SCALE);
+            label.setAttribute("y", n.y * SCALE + 42);
+            label.setAttribute("class", "node-label");
+            label.textContent = n.id;
+            svg.appendChild(label);
+        });
+    }
+
+    socket.on("state_update", function(state) {
+        currentState = state;
+        var risk = state.overall_risk;
+        var riskEl = document.getElementById("risk-value");
+        riskEl.innerText = risk.toFixed(1);
+        riskEl.className = "risk-display " + riskClass(risk);
+        document.getElementById("risk-level").innerText = riskLevel(risk);
+
+        var logEl = document.getElementById("event-log");
+        logEl.innerHTML = state.event_log.map(function(e) { return "<div>" + e + "</div>"; }).join("");
+        logEl.scrollTop = logEl.scrollHeight;
+
+        renderGraph(state);
+    });
+
+    buildRoomSelect();
+    buildControls();
+</script>
+{% endblock %}

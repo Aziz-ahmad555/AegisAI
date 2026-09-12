@@ -1,12 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AegisAI - Login</title>
+    <title>Aegis Command - Sign in</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --base: #0b0d10;
+            --panel: #14171b;
+            --line: #262b31;
+            --text: #e8e6e1;
+            --text-dim: #8a8f96;
+            --text-faint: #565c64;
+            --amber: #e8a33d;
+            --red: #e5484d;
+        }
+        * { box-sizing: border-box; }
         body {
-            background: #0d1117;
-            color: #e6edf3;
-            font-family: 'Segoe UI', Arial, sans-serif;
+            background: var(--base);
+            color: var(--text);
+            font-family: 'IBM Plex Sans', Arial, sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -14,49 +27,65 @@
             margin: 0;
         }
         .login-box {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 32px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            padding: 36px;
             width: 320px;
         }
-        h1 { color: #58a6ff; font-size: 1.4em; margin-top: 0; }
+        .mark { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+        .dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            background: var(--amber); box-shadow: 0 0 8px var(--amber);
+        }
+        h1 { font-size: 1.15em; font-weight: 600; margin: 0; }
+        .tag {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.68em;
+            color: var(--text-faint);
+            letter-spacing: 0.03em;
+            margin-bottom: 24px;
+        }
         input {
             width: 100%;
             padding: 10px;
-            margin: 8px 0;
-            background: #21262d;
-            color: #e6edf3;
-            border: 1px solid #30363d;
-            border-radius: 6px;
+            margin: 6px 0;
+            background: var(--base);
+            color: var(--text);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            font-family: 'IBM Plex Sans', Arial, sans-serif;
             box-sizing: border-box;
         }
+        input:focus { outline: none; border-color: var(--amber); }
         button {
             width: 100%;
             padding: 10px;
-            margin-top: 12px;
-            background: #1f6feb;
-            color: white;
+            margin-top: 14px;
+            background: var(--amber);
+            color: #1a1305;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 1em;
+            font-weight: 600;
         }
-        button:hover { background: #388bfd; }
-        .error { color: #f85149; font-size: 0.9em; margin-top: 8px; }
-        .note { color: #8b949e; font-size: 0.8em; margin-top: 16px; }
+        button:hover { background: #f0ad4f; }
+        .error { color: var(--red); font-size: 0.85em; margin-top: 10px; }
+        .note { color: var(--text-faint); font-size: 0.76em; margin-top: 18px; line-height: 1.5; }
     </style>
 </head>
 <body>
     <div class="login-box">
-        <h1>AegisAI Command Center</h1>
+        <div class="mark"><span class="dot"></span><h1>Aegis</h1></div>
+        <div class="tag">EMERGENCY INTELLIGENCE</div>
         <form method="POST">
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Log in</button>
+            <button type="submit">Sign in</button>
         </form>
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        <div class="note">Default: operator / aegisai2026 (set AEGISAI_USERNAME / AEGISAI_PASSWORD env vars to change)</div>
+        <div class="note">Default: operator / aegisai2026 &mdash; set AEGISAI_USERNAME / AEGISAI_PASSWORD to change.</div>
     </div>
 </body>
 </html>

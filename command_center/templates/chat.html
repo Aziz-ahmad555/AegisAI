@@ -2,96 +2,49 @@
 {% block content %}
 <div class="page-header">
     <h2>Command Chat</h2>
-    <div class="desc">Phases 9 &amp; 11 - Multi-agent coordinator (Fire / Medical / Route specialists) with LLM-based delegation</div>
+    <div class="desc">Natural-language interface over live system state, coordinating fire, medical and routing specialists.</div>
 </div>
 
 <style>
     .chat-status {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 0.8em;
-        margin-bottom: 16px;
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 4px 12px; border-radius: 3px; font-size: 0.78em;
+        margin-bottom: 18px; font-family: 'IBM Plex Mono', monospace;
     }
-    .status-connected { background: #0d3d1f; color: #3fb950; border: 1px solid #238636; }
-    .status-offline { background: #3d2a06; color: #d29922; border: 1px solid #9e6a03; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .status-connected { background: #16281d; color: var(--green); }
+    .status-connected .status-dot { background: var(--green); }
+    .status-offline { background: #2e2308; color: var(--amber); }
+    .status-offline .status-dot { background: var(--amber); }
 
-    #chat-window {
-        height: 420px;
-        overflow-y: auto;
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-    .msg {
-        max-width: 75%;
-        padding: 10px 14px;
-        border-radius: 10px;
-        font-size: 0.92em;
-        line-height: 1.5;
-        white-space: pre-wrap;
-    }
-    .msg-operator {
-        align-self: flex-end;
-        background: #1f6feb;
-        color: white;
-    }
-    .msg-coordinator {
-        align-self: flex-start;
-        background: #21262d;
-        color: #e6edf3;
-        border: 1px solid #30363d;
-    }
-    .msg-meta {
-        font-size: 0.72em;
-        color: #6e7681;
-        margin-top: 4px;
-    }
-    #chat-input-row {
-        display: flex;
-        gap: 8px;
-        margin-top: 12px;
-    }
+    #chat-window { height: 400px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { max-width: 78%; padding: 10px 14px; border-radius: 4px; font-size: 0.9em; line-height: 1.55; white-space: pre-wrap; }
+    .msg-operator { align-self: flex-end; background: var(--amber); color: #1a1305; }
+    .msg-coordinator { align-self: flex-start; background: var(--panel-raised); color: var(--text); border: 1px solid var(--line); }
+    .msg-meta { font-size: 0.7em; color: var(--text-faint); margin-top: 5px; font-family: 'IBM Plex Mono', monospace; }
+    #chat-input-row { display: flex; gap: 8px; margin-top: 14px; }
     #chat-input {
-        flex: 1;
-        padding: 10px;
-        background: #0d1117;
-        color: #e6edf3;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        font-size: 0.95em;
+        flex: 1; padding: 10px; background: var(--base); color: var(--text);
+        border: 1px solid var(--line); border-radius: 4px; font-size: 0.92em; font-family: 'IBM Plex Sans', sans-serif;
     }
-    #chat-send {
-        padding: 10px 20px;
-        background: #1f6feb;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-    #chat-send:hover { background: #388bfd; }
+    #chat-input:focus { outline: none; border-color: var(--amber); }
+    #chat-send { padding: 10px 20px; background: var(--amber); color: #1a1305; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    #chat-send:hover { background: #f0ad4f; }
+    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 8px; font-weight: 500; }
     .suggested {
-        display: block;
-        width: 100%;
-        text-align: left;
-        margin: 4px 0;
-        padding: 8px 10px;
-        background: #21262d;
-        color: #8b949e;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.82em;
+        display: block; width: 100%; text-align: left; margin: 3px 0; padding: 8px 10px;
+        background: var(--panel-raised); color: var(--text-faint); border: 1px solid var(--line);
+        border-radius: 4px; cursor: pointer; font-size: 0.8em; font-family: 'IBM Plex Sans', sans-serif;
     }
-    .suggested:hover { background: #30363d; color: #e6edf3; }
+    .suggested:hover { color: var(--text); border-color: var(--amber); }
 </style>
 
 <div class="chat-status {{ 'status-connected' if llm_status == 'connected' else 'status-offline' }}">
-    {% if llm_status == 'connected' %}LLM Coordinator: Connected (Claude){% else %}LLM Coordinator: {{ llm_status }}{% endif %}
+    <span class="status-dot"></span>
+    {% if llm_status == 'connected' %}Connected &middot; Claude{% else %}Offline &middot; keyword routing{% endif %}
 </div>
 
-<div style="display: flex; gap: 20px;">
+<div style="display: flex; gap: 18px;">
     <div class="card" style="flex: 3;">
         <div id="chat-window"></div>
         <div id="chat-input-row">
@@ -101,7 +54,7 @@
     </div>
 
     <div class="card" style="flex: 1;">
-        <div style="margin-bottom: 8px;"><strong>Try asking</strong></div>
+        <div class="panel-label">Suggested</div>
         <button class="suggested" onclick="askSuggested('Is there a fire right now?')">Is there a fire right now?</button>
         <button class="suggested" onclick="askSuggested('How many people need rescue?')">How many people need rescue?</button>
         <button class="suggested" onclick="askSuggested('Can people evacuate safely?')">Can people evacuate safely?</button>
@@ -138,7 +91,7 @@
         appendMessage(question, "operator");
         input.value = "";
 
-        appendMessage("Thinking...", "coordinator");
+        appendMessage("...", "coordinator");
         var win = document.getElementById("chat-window");
         var thinkingMsg = win.lastChild;
 
@@ -150,7 +103,7 @@
         .then(function(res) { return res.json(); })
         .then(function(data) {
             win.removeChild(thinkingMsg);
-            appendMessage(data.answer, "coordinator", "Mode: " + data.mode);
+            appendMessage(data.answer, "coordinator", data.mode);
         })
         .catch(function() {
             win.removeChild(thinkingMsg);
@@ -158,6 +111,6 @@
         });
     }
 
-    appendMessage("Command Chat ready. Ask about active incidents, evacuation status, or medical needs.", "coordinator");
+    appendMessage("Ready. Ask about active incidents, evacuation status, or medical needs.", "coordinator");
 </script>
 {% endblock %}
