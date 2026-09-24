@@ -1,81 +1,95 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    .hero {
-        margin-bottom: 34px;
-        max-width: 720px;
+    #hero3d {
+        width: 100%;
+        height: 560px;
+        border-radius: 4px;
+        border: 1px solid var(--line);
+        background: radial-gradient(ellipse at center, #10141a 0%, #0b0d10 70%);
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 30px;
+        cursor: grab;
     }
-    .hero h2 {
-        font-size: 1.75em;
+    #hero3d:active { cursor: grabbing; }
+    #hero3d canvas { display: block; }
+    #hero-caption {
+        position: absolute;
+        top: 22px;
+        left: 26px;
+        pointer-events: none;
+    }
+    #hero-caption h2 {
+        font-size: 1.55em;
         font-weight: 600;
-        letter-spacing: -0.015em;
-        margin: 0 0 10px 0;
+        letter-spacing: -0.01em;
+        margin: 0 0 8px 0;
     }
-    .hero p {
+    #hero-caption p {
         color: var(--text-dim);
-        font-size: 1em;
-        line-height: 1.65;
+        font-size: 0.92em;
+        max-width: 460px;
+        line-height: 1.6;
         margin: 0;
     }
+    #node-tooltip {
+        position: absolute;
+        pointer-events: none;
+        background: var(--panel);
+        border: 1px solid var(--amber);
+        color: var(--text);
+        padding: 6px 12px;
+        border-radius: 3px;
+        font-size: 0.82em;
+        font-family: 'IBM Plex Mono', monospace;
+        display: none;
+        z-index: 5;
+        white-space: nowrap;
+    }
+    #hero-hint {
+        position: absolute;
+        bottom: 16px;
+        right: 20px;
+        color: var(--text-faint);
+        font-size: 0.72em;
+        font-family: 'IBM Plex Mono', monospace;
+        letter-spacing: 0.03em;
+        pointer-events: none;
+    }
+
     .strip {
         display: flex;
         border: 1px solid var(--line);
         border-radius: 4px;
         overflow: hidden;
-        margin-bottom: 36px;
+        margin-bottom: 32px;
     }
-    .strip-cell {
-        flex: 1;
-        padding: 16px 20px;
-        border-right: 1px solid var(--line);
-    }
+    .strip-cell { flex: 1; padding: 16px 20px; border-right: 1px solid var(--line); }
     .strip-cell:last-child { border-right: none; }
-    .strip-cell .n {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 1.6em;
-        font-weight: 600;
-        color: var(--amber);
-    }
-    .strip-cell .l {
-        color: var(--text-faint);
-        font-size: 0.78em;
-        margin-top: 3px;
-    }
+    .strip-cell .n { font-family: 'IBM Plex Mono', monospace; font-size: 1.6em; font-weight: 600; color: var(--amber); }
+    .strip-cell .l { color: var(--text-faint); font-size: 0.78em; margin-top: 3px; }
 
     .manifest { border-top: 1px solid var(--line); }
     .m-row {
-        display: grid;
-        grid-template-columns: 160px 1fr 220px;
-        gap: 24px;
-        padding: 18px 4px;
-        border-bottom: 1px solid var(--line);
-        align-items: start;
+        display: grid; grid-template-columns: 160px 1fr 220px; gap: 24px;
+        padding: 18px 4px; border-bottom: 1px solid var(--line); align-items: start;
     }
     .m-row:hover { background: var(--panel); }
-    .m-name a {
-        color: var(--text);
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.98em;
-    }
+    .m-name a { color: var(--text); text-decoration: none; font-weight: 500; font-size: 0.98em; }
     .m-name a:hover { color: var(--amber); }
-    .m-desc {
-        color: var(--text-dim);
-        font-size: 0.88em;
-        line-height: 1.55;
-    }
-    .m-metrics {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.82em;
-        color: var(--text-faint);
-        text-align: right;
-    }
+    .m-desc { color: var(--text-dim); font-size: 0.88em; line-height: 1.55; }
+    .m-metrics { font-family: 'IBM Plex Mono', monospace; font-size: 0.82em; color: var(--text-faint); text-align: right; }
     .m-metrics .hi { color: var(--cyan); }
 </style>
 
-<div class="hero">
-    <h2>Emergency Intelligence Command</h2>
-    <p>A unified operating picture for detection, prediction, and response. Live computer vision, sensor fusion, evacuation routing, and language-based reasoning, coordinated through one interface.</p>
+<div id="hero3d">
+    <div id="hero-caption">
+        <h2>Emergency Intelligence Command</h2>
+        <p>A unified operating picture for detection, prediction, and response. Drag to rotate. Click a node to enter that module.</p>
+    </div>
+    <div id="node-tooltip"></div>
+    <div id="hero-hint">DRAG TO ROTATE &middot; CLICK A NODE</div>
 </div>
 
 <div class="strip">
@@ -86,11 +100,19 @@
 </div>
 
 <div class="manifest">
+    {% if not cloud_mode %}
     <div class="m-row">
         <div class="m-name"><a href="/vision">Live Vision</a></div>
         <div class="m-desc">Real-time object detection and multi-object tracking, with switchable fire/smoke and fall-detection modes, streamed directly from camera.</div>
         <div class="m-metrics">YOLOv8n &middot; CPU inference</div>
     </div>
+    {% else %}
+    <div class="m-row">
+        <div class="m-name" style="color: var(--text-faint);">Live Vision</div>
+        <div class="m-desc">Real-time object detection, tracking, and fire/smoke recognition streamed from camera. Requires local hardware - run the project locally to use this module.</div>
+        <div class="m-metrics">Local only</div>
+    </div>
+    {% endif %}
     <div class="m-row">
         <div class="m-name"><a href="/sensors">Sensor Fusion</a></div>
         <div class="m-desc">Simulated temperature, smoke and gas telemetry combined into a single risk score, with rolling anomaly detection and trend forecasting.</div>
@@ -117,4 +139,203 @@
         <div class="m-metrics">Claude &middot; tool use</div>
     </div>
 </div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script>
+(function() {
+    var container = document.getElementById("hero3d");
+    var tooltip = document.getElementById("node-tooltip");
+
+    var moduleNodes = [
+        { name: "Live Vision", url: "{{ '/vision' if not cloud_mode else '' }}", color: 0xe8a33d },
+        { name: "Sensor Fusion", url: "/sensors", color: 0x4fa8d8 },
+        { name: "Digital Twin", url: "/twin", color: 0xe5484d },
+        { name: "Aerial Search", url: "/aerial", color: 0x4caf6d },
+        { name: "Report Analyzer", url: "/nlp", color: 0x8b7fd6 },
+        { name: "Command Chat", url: "/chat", color: 0xe8a33d },
+    ];
+
+    var W = container.clientWidth, H = container.clientHeight;
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+    camera.position.set(0, 1.2, 9);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(W, H);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    container.appendChild(renderer.domElement);
+
+    var root = new THREE.Group();
+    scene.add(root);
+
+    var coreGeo = new THREE.IcosahedronGeometry(1.15, 1);
+    var coreMat = new THREE.MeshBasicMaterial({ color: 0xe8a33d, wireframe: true, transparent: true, opacity: 0.85 });
+    var core = new THREE.Mesh(coreGeo, coreMat);
+    root.add(core);
+
+    var coreGlowGeo = new THREE.IcosahedronGeometry(1.15, 1);
+    var coreGlowMat = new THREE.MeshBasicMaterial({ color: 0xe8a33d, transparent: true, opacity: 0.06 });
+    var coreGlow = new THREE.Mesh(coreGlowGeo, coreGlowMat);
+    coreGlow.scale.set(1.6, 1.6, 1.6);
+    root.add(coreGlow);
+
+    var orbitRadius = 3.6;
+    var nodeMeshes = [];
+
+    moduleNodes.forEach(function(mod, i) {
+        var angle = (i / moduleNodes.length) * Math.PI * 2;
+        var y = Math.sin(i * 1.7) * 0.9;
+        var x = Math.cos(angle) * orbitRadius;
+        var z = Math.sin(angle) * orbitRadius;
+
+        var geo = new THREE.SphereGeometry(0.22, 20, 20);
+        var mat = new THREE.MeshBasicMaterial({ color: mod.color });
+        var mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        mesh.userData = { url: mod.url, name: mod.name };
+        root.add(mesh);
+        nodeMeshes.push(mesh);
+
+        var glowGeo = new THREE.SphereGeometry(0.22, 20, 20);
+        var glowMat = new THREE.MeshBasicMaterial({ color: mod.color, transparent: true, opacity: 0.25 });
+        var glow = new THREE.Mesh(glowGeo, glowMat);
+        glow.scale.set(2.2, 2.2, 2.2);
+        mesh.add(glow);
+
+        var lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), mesh.position]);
+        var lineMat = new THREE.LineBasicMaterial({ color: mod.color, transparent: true, opacity: 0.35 });
+        var line = new THREE.Line(lineGeo, lineMat);
+        root.add(line);
+    });
+
+    var starCount = 260;
+    var starPositions = new Float32Array(starCount * 3);
+    for (var i = 0; i < starCount; i++) {
+        starPositions[i*3] = (Math.random() - 0.5) * 30;
+        starPositions[i*3+1] = (Math.random() - 0.5) * 30;
+        starPositions[i*3+2] = (Math.random() - 0.5) * 30;
+    }
+    var starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+    var starMat = new THREE.PointsMaterial({ color: 0x565c64, size: 0.035 });
+    var stars = new THREE.Points(starGeo, starMat);
+    scene.add(stars);
+
+    var isDragging = false;
+    var prevX = 0, prevY = 0;
+    var rotY = 0.3, rotX = -0.15;
+    var autoRotate = true;
+
+    container.addEventListener("mousedown", function(e) {
+        isDragging = true; autoRotate = false;
+        prevX = e.clientX; prevY = e.clientY;
+    });
+    window.addEventListener("mouseup", function() { isDragging = false; });
+    window.addEventListener("mousemove", function(e) {
+        if (!isDragging) return;
+        var dx = e.clientX - prevX, dy = e.clientY - prevY;
+        rotY += dx * 0.006;
+        rotX += dy * 0.006;
+        rotX = Math.max(-1.1, Math.min(1.1, rotX));
+        prevX = e.clientX; prevY = e.clientY;
+    });
+
+    var raycaster = new THREE.Raycaster();
+    var mouse = new THREE.Vector2();
+    var hovered = null;
+
+    function updateMouse(e) {
+        var rect = container.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    container.addEventListener("mousemove", function(e) {
+        updateMouse(e);
+        raycaster.setFromCamera(mouse, camera);
+        var intersects = raycaster.intersectObjects(nodeMeshes, false);
+        if (intersects.length > 0) {
+            var obj = intersects[0].object;
+            if (hovered !== obj) {
+                hovered = obj;
+                container.style.cursor = obj.userData.url ? "pointer" : "default";
+                tooltip.innerText = obj.userData.name + (obj.userData.url ? "" : " (local only)");
+                tooltip.style.display = "block";
+            }
+            var rect = container.getBoundingClientRect();
+            tooltip.style.left = (e.clientX - rect.left + 14) + "px";
+            tooltip.style.top = (e.clientY - rect.top - 10) + "px";
+        } else {
+            if (hovered) {
+                hovered = null;
+                container.style.cursor = "grab";
+                tooltip.style.display = "none";
+            }
+        }
+    });
+
+    container.addEventListener("click", function(e) {
+        if (hovered && hovered.userData.url) {
+            window.location.href = hovered.userData.url;
+        }
+    });
+
+    window.addEventListener("resize", function() {
+        var w = container.clientWidth, h = container.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+    });
+
+    var clock = new THREE.Clock();
+    var animationActive = true;
+    var rafId = null;
+
+    // Pause the render loop entirely when this tab isn't the visible/active
+    // one, so it stops competing for CPU with other pages (e.g. Live Vision's
+    // detection inference) running in another tab on the same machine.
+    document.addEventListener("visibilitychange", function() {
+        animationActive = !document.hidden;
+        if (animationActive && rafId === null) {
+            animate();
+        }
+    });
+
+    function animate() {
+        if (!animationActive) { rafId = null; return; }
+        rafId = requestAnimationFrame(animate);
+        var t = clock.getElapsedTime();
+
+        if (autoRotate) rotY += 0.0016;
+        root.rotation.y = rotY;
+        root.rotation.x = rotX;
+
+        core.rotation.y = t * 0.15;
+        core.rotation.x = t * 0.1;
+        var pulse = 1 + Math.sin(t * 1.4) * 0.04;
+        core.scale.set(pulse, pulse, pulse);
+        coreGlow.scale.set(1.6 + Math.sin(t*1.4)*0.08, 1.6 + Math.sin(t*1.4)*0.08, 1.6 + Math.sin(t*1.4)*0.08);
+
+        nodeMeshes.forEach(function(m, i) {
+            var s = 1 + Math.sin(t * 1.2 + i) * 0.08;
+            m.scale.set(s, s, s);
+        });
+
+        stars.rotation.y = t * 0.01;
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Also fully release the WebGL context if the user navigates away from
+    // this page, rather than relying solely on the browser to garbage
+    // collect it - frees the GPU/CPU immediately instead of eventually.
+    window.addEventListener("pagehide", function() {
+        animationActive = false;
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        renderer.dispose();
+    });
+})();
+</script>
 {% endblock %}

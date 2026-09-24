@@ -7,25 +7,77 @@ from ultralytics import YOLO
 class VisionStream:
     """
     Manages a single shared webcam capture and runs one of several detection
-    modes (reusing Phase 1-3 logic) in a background thread. Multiple browser
-    clients can view the same MJPEG stream without opening multiple webcam
-    handles, which would fail on most hardware (only one process can hold
-    a webcam device at a time).
+    modes in a background thread. Multiple browser clients can view the same
+    MJPEG stream without opening multiple webcam handles.
+
+    Performance notes (learned the hard way):
+    - The capture/inference loop is throttled to a fixed max rate rather than
+      running as fast as the hardware allows, so it doesn't consume an entire
+      CPU core continuously on a CPU-only machine.
+    - Heavy inference is skipped entirely whenever no client is actively
+      viewing the /video_feed stream - otherwise the loop kept running full
+      YOLO inference in the background forever after the first visit to the
+      page, even while the user was on a completely different page, starving
+      every other request on the same machine of CPU.
+    - Frames are downscaled and JPEG-compressed more aggressively before
+      encoding, since the original full-resolution frames were unnecessarily
+      large for a live preview and made streaming over a bandwidth-limited
+      tunnel (e.g. ngrok's free tier) painfully laggy.
     """
 
     MODES = ["tracking", "fire_smoke", "fall_detection"]
+    TARGET_FPS = 8
+    STREAM_WIDTH = 480
 
     def __init__(self):
         self.general_model = YOLO("yolov8n.pt")
         self.fire_model = YOLO("fire_smoke_model.pt")
-        self.pose_model = None  # loaded lazily only if fall_detection mode is used
+        self.pose_model = None
 
         self.cap = None
         self.lock = threading.RLock()
         self.mode = "tracking"
         self.latest_jpeg = None
         self.latest_info = {"mode": "tracking", "detail": ""}
+        self.camera_available = True
         self._running = False
+        self._viewer_count = 0
+        self._placeholder_jpeg = self._build_placeholder()
+
+    def add_viewer(self):
+        with self.lock:
+            self._viewer_count += 1
+
+    def remove_viewer(self):
+        with self.lock:
+            self._viewer_count = max(0, self._viewer_count - 1)
+
+    def _has_viewers(self):
+        with self.lock:
+            return self._viewer_count > 0
+
+    def _build_placeholder(self):
+        import numpy as np
+        frame = np.zeros((270, 480, 3), dtype="uint8")
+        frame[:] = (17, 17, 17)
+        cv2.putText(frame, "No camera available", (60, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (61, 163, 232), 2)
+        cv2.putText(frame, "This feature requires local hardware", (60, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
+        ok, buffer = cv2.imencode(".jpg", frame)
+        return buffer.tobytes() if ok else None
+
+    def _idle_jpeg(self, frame):
+        # Downscale even the "just show the camera, no inference" view so it
+        # stays cheap to stream while no one is actively watching.
+        small = self._resize(frame)
+        ok, buffer = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 60])
+        return buffer.tobytes() if ok else None
+
+    def _resize(self, frame):
+        h, w = frame.shape[:2]
+        if w <= self.STREAM_WIDTH:
+            return frame
+        scale = self.STREAM_WIDTH / w
+        return cv2.resize(frame, (self.STREAM_WIDTH, int(h * scale)))
 
     def set_mode(self, mode):
         if mode not in self.MODES:
@@ -37,24 +89,24 @@ class VisionStream:
         return True
 
     def _process_tracking(self, frame):
-        results = self.general_model.track(frame, imgsz=416, persist=True, verbose=False)
+        results = self.general_model.track(frame, imgsz=320, persist=True, verbose=False)
         annotated = results[0].plot()
         count = len(results[0].boxes) if results[0].boxes is not None else 0
-        cv2.putText(annotated, f"Objects tracked: {count}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(annotated, f"Objects tracked: {count}", (10, 25),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         return annotated, f"{count} objects tracked"
 
     def _process_fire_smoke(self, frame):
-        results = self.fire_model(frame, imgsz=416, conf=0.55, verbose=False)
+        results = self.fire_model(frame, imgsz=320, conf=0.55, verbose=False)
         annotated = results[0].plot()
         fire_detected = results[0].boxes is not None and len(results[0].boxes) > 0
         label = "FIRE/SMOKE DETECTED" if fire_detected else "Zone clear"
         color = (0, 0, 255) if fire_detected else (0, 255, 0)
-        cv2.putText(annotated, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        cv2.putText(annotated, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         return annotated, label
 
     def _process_fall_detection(self, frame):
-        results = self.pose_model(frame, imgsz=416, verbose=False)
+        results = self.pose_model(frame, imgsz=320, verbose=False)
         annotated = results[0].plot()
         fall_detected = False
 
@@ -80,22 +132,33 @@ class VisionStream:
 
         label = "POSSIBLE FALL DETECTED" if fall_detected else "Normal posture"
         color = (0, 0, 255) if fall_detected else (0, 255, 0)
-        cv2.putText(annotated, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        cv2.putText(annotated, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         return annotated, label
 
     def _capture_loop(self):
-        # CAP_DSHOW is the more reliable backend for webcams on Windows;
-        # the default backend can silently fail to deliver frames even
-        # when isOpened() reports True.
-        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-        if not self.cap.isOpened():
-            self.latest_info = {"mode": self.mode, "detail": "ERROR: could not open webcam - check no other app/script is using it"}
+        try:
+            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        except Exception:
+            self.cap = cv2.VideoCapture(0)
+
+        if not self.cap or not self.cap.isOpened():
+            with self.lock:
+                self.camera_available = False
+                self.latest_info = {
+                    "mode": self.mode,
+                    "detail": "No camera available - this feature requires local hardware and is not available in the hosted demo.",
+                }
             return
 
+        with self.lock:
+            self.camera_available = True
         self.latest_info = {"mode": self.mode, "detail": "Waiting for first frame..."}
         consecutive_failures = 0
+        frame_interval = 1.0 / self.TARGET_FPS
 
         while self._running:
+            loop_start = time.time()
+
             ret, frame = self.cap.read()
             if not ret:
                 consecutive_failures += 1
@@ -112,23 +175,38 @@ class VisionStream:
             with self.lock:
                 current_mode = self.mode
 
-            try:
-                if current_mode == "tracking":
-                    annotated, detail = self._process_tracking(frame)
-                elif current_mode == "fire_smoke":
-                    annotated, detail = self._process_fire_smoke(frame)
-                elif current_mode == "fall_detection":
-                    annotated, detail = self._process_fall_detection(frame)
-                else:
-                    annotated, detail = frame, ""
-            except Exception as e:
-                annotated, detail = frame, f"error: {e}"
+            if self._has_viewers():
+                try:
+                    frame = self._resize(frame)
+                    if current_mode == "tracking":
+                        annotated, detail = self._process_tracking(frame)
+                    elif current_mode == "fire_smoke":
+                        annotated, detail = self._process_fire_smoke(frame)
+                    elif current_mode == "fall_detection":
+                        annotated, detail = self._process_fall_detection(frame)
+                    else:
+                        annotated, detail = frame, ""
 
-            ok, buffer = cv2.imencode(".jpg", annotated)
-            if ok:
+                    ok, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 65])
+                    if ok:
+                        with self.lock:
+                            self.latest_jpeg = buffer.tobytes()
+                            self.latest_info = {"mode": current_mode, "detail": detail}
+                except Exception as e:
+                    with self.lock:
+                        self.latest_info = {"mode": current_mode, "detail": f"error: {e}"}
+            else:
+                # No one is watching - keep the camera warm with a cheap,
+                # un-processed idle frame instead of running full inference
+                # for nobody, so CPU stays free for everything else.
                 with self.lock:
-                    self.latest_jpeg = buffer.tobytes()
-                    self.latest_info = {"mode": current_mode, "detail": detail}
+                    self.latest_jpeg = self._idle_jpeg(frame)
+                    self.latest_info = {"mode": self.mode, "detail": "Idle (no active viewer)"}
+
+            elapsed = time.time() - loop_start
+            sleep_time = frame_interval - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
         self.cap.release()
 
@@ -141,6 +219,8 @@ class VisionStream:
 
     def get_jpeg(self):
         with self.lock:
+            if not self.camera_available:
+                return self._placeholder_jpeg
             return self.latest_jpeg
 
     def get_info(self):
@@ -148,9 +228,13 @@ class VisionStream:
             return dict(self.latest_info)
 
     def generate_mjpeg(self):
-        while True:
-            frame = self.get_jpeg()
-            if frame is not None:
-                yield (b"--frame\r\n"
-                       b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
-            time.sleep(0.05)
+        self.add_viewer()
+        try:
+            while True:
+                frame = self.get_jpeg()
+                if frame is not None:
+                    yield (b"--frame\r\n"
+                           b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+                time.sleep(1.0 / self.TARGET_FPS)
+        finally:
+            self.remove_viewer()

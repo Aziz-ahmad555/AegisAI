@@ -141,7 +141,7 @@
         </div>
         <nav>
             <a href="/" class="nav-link">Overview</a>
-            <a href="/vision" class="nav-link">Live Vision</a>
+            {% if not cloud_mode %}<a href="/vision" class="nav-link">Live Vision</a>{% endif %}
             <a href="/sensors" class="nav-link">Sensor Fusion</a>
             <a href="/twin" class="nav-link">Digital Twin</a>
             <a href="/aerial" class="nav-link">Aerial Search</a>

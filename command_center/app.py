@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import threading
 import time
@@ -12,7 +15,13 @@ from vision_stream import VisionStream
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+
+# When true (set via env var on the hosted deployment), Live Vision is hidden
+# entirely rather than attempting to stream from a camera that doesn't exist
+# on a cloud server. Also skips loading the vision models at all, saving
+# meaningful memory on constrained hosting tiers.
+CLOUD_MODE = os.environ.get("AEGISAI_CLOUD_MODE", "false").lower() == "true"
 
 OPERATOR_USERNAME = os.environ.get("AEGISAI_USERNAME", "operator")
 OPERATOR_PASSWORD = os.environ.get("AEGISAI_PASSWORD", "aegisai2026")
@@ -20,15 +29,12 @@ OPERATOR_PASSWORD = os.environ.get("AEGISAI_PASSWORD", "aegisai2026")
 twin = BuildingDigitalTwin()
 llm_client = get_client()
 sensors = SensorFusionState()
-vision = VisionStream()
+vision = None if CLOUD_MODE else VisionStream()
 
-AERIAL_SAMPLES = [
-    {"file": "sample_1.jpg", "caption": "Aerial survey - person detected in open terrain"},
-    {"file": "sample_2.jpg", "caption": "Aerial survey - pose classification in progress"},
-    {"file": "sample_3.jpg", "caption": "Aerial survey - distress-relevant pose detection"},
-    {"file": "sample_4.jpg", "caption": "Aerial survey - search and rescue scenario"},
-    {"file": "sample_5.jpg", "caption": "Aerial survey - wooded terrain detection"},
-]
+
+@app.context_processor
+def inject_cloud_mode():
+    return {"cloud_mode": CLOUD_MODE}
 
 
 def login_required(f):
@@ -99,6 +105,8 @@ def aerial_page():
 @app.route("/vision")
 @login_required
 def vision_page():
+    if CLOUD_MODE:
+        return render_template("vision_disabled.html")
     vision.start()
     return render_template("vision.html")
 
@@ -106,12 +114,16 @@ def vision_page():
 @app.route("/video_feed")
 @login_required
 def video_feed():
+    if CLOUD_MODE:
+        return "", 404
     return Response(vision.generate_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.route("/api/vision_mode", methods=["POST"])
 @login_required
 def api_vision_mode():
+    if CLOUD_MODE:
+        return jsonify({"success": False, "reason": "disabled in hosted demo"}), 404
     data = request.get_json(force=True)
     mode = data.get("mode", "tracking")
     ok = vision.set_mode(mode)
@@ -121,6 +133,8 @@ def api_vision_mode():
 @app.route("/api/vision_info")
 @login_required
 def api_vision_info():
+    if CLOUD_MODE:
+        return jsonify({"detail": "Live Vision is disabled in the hosted demo - run locally to use this feature."})
     return jsonify(vision.get_info())
 
 
@@ -145,6 +159,15 @@ def api_chat():
     answer = ask_coordinator(question, llm_client)
     mode = "llm" if llm_client else "offline"
     return jsonify({"answer": answer, "mode": mode})
+
+
+AERIAL_SAMPLES = [
+    {"file": "sample_1.jpg", "caption": "Aerial survey - person detected in open terrain"},
+    {"file": "sample_2.jpg", "caption": "Aerial survey - pose classification in progress"},
+    {"file": "sample_3.jpg", "caption": "Aerial survey - distress-relevant pose detection"},
+    {"file": "sample_4.jpg", "caption": "Aerial survey - search and rescue scenario"},
+    {"file": "sample_5.jpg", "caption": "Aerial survey - wooded terrain detection"},
+]
 
 
 # --- Digital Twin WebSocket handlers ---
@@ -215,13 +238,16 @@ def periodic_broadcast():
         broadcast_sensor_state()
 
 
+# Start background loops at import time, not just under __main__, so they
+# also run correctly under a production WSGI server (gunicorn) which imports
+# this module directly rather than executing it as a script.
+sensors.start_background_loop(interval_seconds=1.0)
+_broadcaster_thread = threading.Thread(target=periodic_broadcast, daemon=True)
+_broadcaster_thread.start()
+
+
 if __name__ == "__main__":
-    sensors.start_background_loop(interval_seconds=1.0)
-
-    broadcaster = threading.Thread(target=periodic_broadcast, daemon=True)
-    broadcaster.start()
-
     print("AegisAI Command Center")
     print(f"Login with username '{OPERATOR_USERNAME}' (set AEGISAI_USERNAME/AEGISAI_PASSWORD env vars to change)")
     print("Open http://127.0.0.1:5000 in your browser")
-    socketio.run(app, host="127.0.0.1", port=5000, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="127.0.0.1", port=5000, debug=False)
