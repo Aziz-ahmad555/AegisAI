@@ -5,6 +5,7 @@ from functools import wraps
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 from flask_socketio import SocketIO, disconnect, emit
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from aegis_core.building_state import BuildingDigitalTwin
 from aegis_core.coordinator import ask_coordinator, get_client, init_agents
@@ -12,15 +13,7 @@ from aegis_core.emergency_nlp import parse_emergency_report
 from aegis_core.sensor_state import SensorFusionState
 from aegis_core.system import AegisSystem
 
-app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
-# Threading mode (real OS threads) rather than eventlet: eventlet's green
-# threads all share one OS thread, so every CPU-bound YOLO inference froze the
-# whole server - video stream, WebSocket pushes and page loads - until it
-# finished. PyTorch and OpenCV release the GIL during inference, so plain
-# threads let vision and the web server genuinely run in parallel.
-# Production: see "Production server" in ROADMAP.md (gunicorn gthread, 1 worker).
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+import security
 
 # When true (set via env var on the hosted deployment), Live Vision is hidden
 # entirely rather than attempting to stream from a camera that doesn't exist
@@ -28,8 +21,42 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # meaningful memory on constrained hosting tiers.
 CLOUD_MODE = os.environ.get("AEGISAI_CLOUD_MODE", "false").lower() == "true"
 
-OPERATOR_USERNAME = os.environ.get("AEGISAI_USERNAME", "operator")
-OPERATOR_PASSWORD = os.environ.get("AEGISAI_PASSWORD", "aegisai2026")
+# Local mode runs with simple documented defaults; a hosted deployment must be
+# configured properly or it refuses to start (see security.py).
+if CLOUD_MODE:
+    _problems = security.cloud_config_problems(os.environ)
+    if _problems:
+        raise security.InsecureCloudConfig(
+            "Refusing to start in cloud mode:\n  - " + "\n  - ".join(_problems)
+        )
+
+credentials = security.Credentials.from_env(os.environ)
+login_limiter = security.LoginRateLimiter()
+
+app = Flask(__name__)
+app.config.update(
+    SECRET_KEY=os.environ.get("AEGISAI_SECRET_KEY") or security.DEFAULT_SECRET_KEY,
+    MAX_CONTENT_LENGTH=security.MAX_REQUEST_BYTES,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=CLOUD_MODE,      # hosted = HTTPS; local http://127.0.0.1 must still work
+)
+if os.environ.get("AEGISAI_TRUST_PROXY", "false").lower() == "true":
+    # Behind a hosting proxy every request comes from the proxy's IP; trust its
+    # X-Forwarded-* headers so rate limiting keys on the real client address.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+# Socket.IO accepts only same-origin browsers unless extra origins are listed
+# (comma-separated), which blocks cross-site WebSocket hijacking.
+_allowed_origins = [o.strip() for o in os.environ.get("AEGISAI_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
+# Threading mode (real OS threads) rather than eventlet: eventlet's green
+# threads all share one OS thread, so every CPU-bound YOLO inference froze the
+# whole server - video stream, WebSocket pushes and page loads - until it
+# finished. PyTorch and OpenCV release the GIL during inference, so plain
+# threads let vision and the web server genuinely run in parallel.
+# Production: see "Production server" in ROADMAP.md (gunicorn gthread, 1 worker).
+socketio = SocketIO(app, cors_allowed_origins=_allowed_origins or None, async_mode="threading")
 
 twin = BuildingDigitalTwin()
 llm_client = get_client()
@@ -48,8 +75,27 @@ init_agents(system)
 
 
 @app.context_processor
-def inject_cloud_mode():
-    return {"cloud_mode": CLOUD_MODE}
+def inject_template_globals():
+    return {
+        "cloud_mode": CLOUD_MODE,
+        "csrf_token": security.csrf_token,
+        # Only advertise the built-in demo login when it's actually in use.
+        "show_default_login": not CLOUD_MODE and credentials.uses_default_password,
+    }
+
+
+app.before_request(security.verify_csrf)
+app.after_request(security.add_security_headers)
+
+
+@app.errorhandler(400)
+@app.errorhandler(413)
+@app.errorhandler(429)
+def api_error(err):
+    # JSON for API calls, plain text otherwise; never a stack trace.
+    if request.path.startswith("/api/"):
+        return jsonify({"error": err.description}), err.code
+    return err.description, err.code
 
 
 def login_required(f):
@@ -64,19 +110,32 @@ def login_required(f):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
+    status = 200
     if request.method == "POST":
+        client = request.remote_addr or "unknown"
+        wait = login_limiter.retry_after(client)
+        if wait:
+            error = f"Too many failed attempts. Try again in {wait} seconds."
+            response = render_template("login.html", error=error)
+            return response, 429, {"Retry-After": str(wait)}
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        if username == OPERATOR_USERNAME and password == OPERATOR_PASSWORD:
+        if credentials.verify(username, password):
+            login_limiter.reset(client)
+            # New session on login (prevents session fixation); a fresh CSRF
+            # token is issued on the next page render.
+            session.clear()
             session["logged_in"] = True
             return redirect(url_for("overview"))
+        login_limiter.record_failure(client)
         error = "Invalid credentials"
-    return render_template("login.html", error=error)
+        status = 401
+    return render_template("login.html", error=error), status
 
 
 @app.route("/logout")
 def logout():
-    session.pop("logged_in", None)
+    session.clear()
     return redirect(url_for("login"))
 
 
@@ -139,7 +198,7 @@ def video_feed():
 def api_vision_mode():
     if CLOUD_MODE:
         return jsonify({"success": False, "reason": "disabled in hosted demo"}), 404
-    data = request.get_json(force=True)
+    data = request.get_json(force=True, silent=True) or {}
     mode = data.get("mode", "tracking")
     ok = vision.set_mode(mode)
     return jsonify({"success": ok, "mode": mode})
@@ -156,10 +215,12 @@ def api_vision_info():
 @app.route("/api/analyze_report", methods=["POST"])
 @login_required
 def api_analyze_report():
-    data = request.get_json(force=True)
+    data = request.get_json(force=True, silent=True) or {}
     text = data.get("text", "")
-    if not text.strip():
+    if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "No text provided"}), 400
+    if len(text) > security.MAX_REPORT_CHARS:
+        return jsonify({"error": f"Report too long (max {security.MAX_REPORT_CHARS} characters)"}), 413
     result = parse_emergency_report(text)
     linked = system.ingest_report(result)
     result["zones"] = linked["zones"]
@@ -176,7 +237,7 @@ def api_timeline():
 @app.route("/api/actions/<int:proposal_id>", methods=["POST"])
 @login_required
 def api_decide_action(proposal_id):
-    data = request.get_json(force=True) or {}
+    data = request.get_json(force=True, silent=True) or {}
     decided = system.decide(proposal_id, bool(data.get("approve")))
     if decided is None:
         return jsonify({"error": "No such pending action (already decided?)"}), 404
@@ -187,10 +248,12 @@ def api_decide_action(proposal_id):
 @app.route("/api/chat", methods=["POST"])
 @login_required
 def api_chat():
-    data = request.get_json(force=True)
+    data = request.get_json(force=True, silent=True) or {}
     question = data.get("question", "")
-    if not question.strip():
+    if not isinstance(question, str) or not question.strip():
         return jsonify({"error": "No question provided"}), 400
+    if len(question) > security.MAX_QUESTION_CHARS:
+        return jsonify({"error": f"Question too long (max {security.MAX_QUESTION_CHARS} characters)"}), 413
     answer = ask_coordinator(question, llm_client)
     mode = "llm" if llm_client else "offline"
     return jsonify({"answer": answer, "mode": mode})
@@ -314,6 +377,9 @@ _broadcaster_thread.start()
 
 if __name__ == "__main__":
     print("AegisAI Command Center")
-    print(f"Login with username '{OPERATOR_USERNAME}' (set AEGISAI_USERNAME/AEGISAI_PASSWORD env vars to change)")
+    if credentials.uses_default_password:
+        print(f"Login: {credentials.username} / {security.DEFAULT_PASSWORD}  (local demo default)")
+    else:
+        print(f"Login: username '{credentials.username}' with your configured password")
     print("Open http://127.0.0.1:5000 in your browser")
     socketio.run(app, host="127.0.0.1", port=5000, debug=False, allow_unsafe_werkzeug=True)

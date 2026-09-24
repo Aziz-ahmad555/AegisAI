@@ -1,22 +1,14 @@
 """App-level wiring: auth on HTTP + WebSocket, report -> proposal -> twin over
 the real Flask/Socket.IO stack, live agents answering through /api/chat."""
-import app as aegis
 import pytest
 
-
-@pytest.fixture
-def client():
-    aegis.app.config["TESTING"] = True
-    c = aegis.app.test_client()
-    yield c
-    for zone in aegis.system.zones():
-        aegis.system.clear_zone(zone)
-    for p in aegis.system.pending_actions():
-        aegis.system.decide(p["id"], approve=False)
+import app as aegis
+from helpers import api_post
+from helpers import login as _login
 
 
 def login(c):
-    r = c.post("/login", data={"username": aegis.OPERATOR_USERNAME, "password": aegis.OPERATOR_PASSWORD})
+    r = _login(c)
     assert r.status_code == 302
 
 
@@ -27,8 +19,8 @@ def test_pages_require_login(client, path):
 
 
 def test_bad_password_is_rejected(client):
-    r = client.post("/login", data={"username": aegis.OPERATOR_USERNAME, "password": "wrong"})
-    assert r.status_code == 200 and b"Invalid credentials" in r.data
+    r = _login(client, password="wrong")
+    assert r.status_code == 401 and b"Invalid credentials" in r.data
 
 
 def test_unauthenticated_socket_is_refused(client):
@@ -49,7 +41,7 @@ def test_report_to_confirmed_fire_end_to_end(client):
     sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
     sio.get_received()
 
-    r = client.post("/api/analyze_report", json={"text": "There is a fire in Corridor B, two people trapped"})
+    r = api_post(client, "/api/analyze_report", {"text": "There is a fire in Corridor B, two people trapped"})
     body = r.get_json()
     assert body["zones"] == ["CorridorB"]
     assert body["proposals"] and aegis.twin.zone_status["CorridorB"] == "SAFE"
@@ -60,7 +52,7 @@ def test_report_to_confirmed_fire_end_to_end(client):
     sio.emit("decide_action", {"id": body["proposals"][0]["id"], "approve": True})
     assert aegis.twin.zone_status["CorridorB"] == "FIRE"
 
-    answer = client.post("/api/chat", json={"question": "Which evacuation routes are blocked?"}).get_json()
+    answer = api_post(client, "/api/chat", {"question": "Which evacuation routes are blocked?"}).get_json()
     assert answer["mode"] == "offline"
     assert "CorridorB" in answer["answer"]
     sio.disconnect()
@@ -91,5 +83,5 @@ def test_invalid_socket_input_is_ignored(client):
 
 def test_decide_unknown_action_returns_404(client):
     login(client)
-    r = client.post("/api/actions/99999", json={"approve": True})
+    r = api_post(client, "/api/actions/99999", {"approve": True})
     assert r.status_code == 404

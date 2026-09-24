@@ -80,12 +80,13 @@
         <div class="mark"><span class="dot"></span><h1>Aegis</h1></div>
         <div class="tag">EMERGENCY INTELLIGENCE</div>
         <form method="POST">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="username" placeholder="Username" autocomplete="username" required>
+            <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
             <button type="submit">Sign in</button>
         </form>
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        <div class="note">Default: operator / aegisai2026 &mdash; set AEGISAI_USERNAME / AEGISAI_PASSWORD to change.</div>
+        {% if show_default_login %}<div class="note">Local demo login: operator / aegisai2026 &mdash; set AEGISAI_PASSWORD_HASH to use your own password.</div>{% endif %}
     </div>
 </body>
 </html>

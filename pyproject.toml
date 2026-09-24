@@ -27,3 +27,8 @@ extend-exclude = ["archive", "**/venv"]
 select = ["F", "E", "W", "B", "I"]
 # Long lines here are human-readable strings (prompts, tool descriptions, messages).
 ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aegis_core"]
+# command_center's own modules (run with command_center/ as the working directory)
+known-local-folder = ["app", "security", "helpers", "conftest"]

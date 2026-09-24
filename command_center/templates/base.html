@@ -188,8 +188,25 @@
         .tl-empty { color: var(--text-faint); font-size: 0.85em; padding: 8px 0; }
         @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
     </style>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="{{ url_for('static', filename='vendor/socket.io-4.7.2.min.js') }}"></script>
     <script>
+        // Every state-changing fetch() from any page carries the session's
+        // CSRF token; the server rejects POSTs without it.
+        (function () {
+            var token = document.querySelector('meta[name="csrf-token"]').content;
+            var nativeFetch = window.fetch.bind(window);
+            window.fetch = function (url, opts) {
+                opts = opts || {};
+                var method = (opts.method || "GET").toUpperCase();
+                if (method !== "GET" && method !== "HEAD") {
+                    var headers = new Headers(opts.headers || {});
+                    headers.set("X-CSRF-Token", token);
+                    opts.headers = headers;
+                }
+                return nativeFetch(url, opts);
+            };
+        })();
         // One shared real-time connection per page; page scripts reuse it.
         window.aegisSocket = io();
     </script>
