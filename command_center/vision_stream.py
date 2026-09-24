@@ -57,6 +57,24 @@ def _write_tracker_config(conf):
     return path
 
 
+def open_camera(index=0):
+    """
+    The one place the webcam is opened - the app and tools/diagnose_detections.py
+    both use this, so a diagnostic capture always matches what the app sees.
+    """
+    # CAP_DSHOW is the more reliable backend for webcams on Windows;
+    # the default backend can silently fail to deliver frames even
+    # when isOpened() reports True.
+    cap = cv2.VideoCapture(index, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(index)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(index)
+    if cap.isOpened():
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    return cap
+
+
 def _draw_status(frame, text, color):
     # Status banner in the bottom-left on a dark plate, so it never collides
     # with YOLO's box labels, which are drawn at the top-left of each box.
@@ -240,21 +258,9 @@ class VisionStream:
 
     # ----- threads ---------------------------------------------------------
 
-    def _open_camera(self):
-        # CAP_DSHOW is the more reliable backend for webcams on Windows;
-        # the default backend can silently fail to deliver frames even
-        # when isOpened() reports True.
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(0)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(0)
-        if cap.isOpened():
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        return cap
 
     def _grab_loop(self):
-        cap = self._open_camera()
+        cap = open_camera()
         if not cap.isOpened():
             with self.lock:
                 self.camera_available = False

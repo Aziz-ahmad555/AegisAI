@@ -31,14 +31,27 @@ WATCH = {"cell phone", "person", "remote", "book", "laptop"}
 
 
 def capture(seconds, every):
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(0)
+    # Open the camera through the app's own function so this capture uses
+    # the exact same index, backend and resolution as Live Vision.
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from vision_stream import open_camera
+
+    cap = open_camera()
     if not cap.isOpened():
-        sys.exit("No camera available (is the Command Center still running?)")
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    for _ in range(15):  # let auto-exposure settle
-        cap.read()
+        sys.exit("No camera available (is the Command Center still running? it holds the camera)")
+
+    # Auto-exposure warm-up: discard frames until brightness stops changing
+    # (or 3 s pass), so the first captured frames aren't under-exposed.
+    t0, prev, stable = time.time(), None, 0
+    while time.time() - t0 < 3 and stable < 5:
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        b = frame.mean()
+        stable = stable + 1 if prev is not None and abs(b - prev) < 1.0 else 0
+        prev = b
+    print(f"Camera warmed up in {time.time() - t0:.1f}s, brightness {prev if prev is not None else 0:.1f}/255")
+
     print(f"Capturing for {seconds}s - hold the object up to the camera now...")
     frames, n, t0 = [], 0, time.time()
     while time.time() - t0 < seconds:
@@ -115,8 +128,10 @@ def main():
     if not frames:
         sys.exit("No frames.")
 
-    dark = sum(1 for f in frames if f.mean() < DARK_MEAN)
-    print(f"{len(frames)} frames, mean brightness {statistics.mean(f.mean() for f in frames):.1f}/255")
+    levels = [f.mean() for f in frames]
+    dark = sum(1 for b in levels if b < DARK_MEAN)
+    print(f"{len(frames)} frames, brightness mean {statistics.mean(levels):.1f} "
+          f"min {min(levels):.1f} max {max(levels):.1f} (/255)")
     if dark > len(frames) / 2:
         print(f"WARNING: {dark}/{len(frames)} frames are essentially black - camera covered, "
               "privacy shutter closed, or the room is dark. Results below are not meaningful.")
