@@ -46,7 +46,7 @@ def answer_text(events):
 
 @pytest.mark.parametrize("env, provider, description_part", [
     ({}, None, "no key found"),
-    ({"GROQ_API_KEY": FAKE_KEY}, "groq", "groq / llama-3.3-70b-versatile"),
+    ({"GROQ_API_KEY": FAKE_KEY}, "groq", "groq / openai/gpt-oss-120b"),
     ({"ANTHROPIC_API_KEY": "sk-ant-test"}, "claude", "claude / claude-opus-5"),
     ({"GROQ_API_KEY": FAKE_KEY, "ANTHROPIC_API_KEY": "sk-ant-test"}, "groq", "groq /"),     # groq wins when both
     ({"GROQ_API_KEY": FAKE_KEY, "ANTHROPIC_API_KEY": "sk-ant-test", "AEGISAI_LLM_PROVIDER": "claude"}, "claude", "claude /"),
@@ -57,6 +57,7 @@ def answer_text(events):
     ({"GROQ_API_KEY": FAKE_KEY, "AEGISAI_LLM_PROVIDER": " GROQ "}, "groq", "groq /"),
 ])
 def test_provider_selection(env, provider, description_part):
+    env = {"AEGISAI_GROQ_CHECK_MODELS": "false", **env}
     llm, description = coordinator.get_llm(env)
     assert (llm.provider if llm else None) == provider
     assert description_part in description
@@ -69,7 +70,7 @@ def test_startup_prints_the_active_provider_and_never_the_key():
     r = subprocess.run([sys.executable, "-c", "import app"], cwd=APP_DIR, env=env,
                        capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
-    assert "LLM: groq / llama-3.3-70b-versatile" in r.stdout
+    assert "LLM: groq / openai/gpt-oss-120b" in r.stdout
     assert FAKE_KEY not in r.stdout + r.stderr
 
 
@@ -78,11 +79,11 @@ def test_startup_prints_the_active_provider_and_never_the_key():
 def test_groq_streams_text_and_sends_the_shared_system_prompt():
     llm = groq([groq_text("All routes are open.")])
     events = run("Are routes open?", llm)
-    assert {"type": "mode", "mode": "llm", "provider": "groq", "model": "llama-3.3-70b-versatile"} in events
+    assert {"type": "mode", "mode": "llm", "provider": "groq", "model": "openai/gpt-oss-120b"} in events
     assert len([e for e in events if e["type"] == "text"]) == 2           # arrived in chunks
     assert answer_text(events) == "All routes are open."
     req = llm.client.requests[0]
-    assert req["model"] == "llama-3.3-70b-versatile" and req["stream"] is True
+    assert req["model"] == "openai/gpt-oss-120b" and req["stream"] is True
     assert req["tool_choice"] == "auto" and {t["function"]["name"] for t in req["tools"]} == set(coordinator.AGENT_FUNCTIONS)
     assert req["messages"][0] == {"role": "system", "content": coordinator.COORDINATOR_PROMPT}
 
@@ -200,3 +201,63 @@ def test_network_failures_are_named():
                           (groq_sdk.APIConnectionError(request=req), "network connection failed")]:
         notice = next(e["text"] for e in run("fire?", groq([err])) if e["type"] == "notice")
         assert expected in notice
+
+
+# --- choosing a Groq model this key can actually use -------------------------------------------
+
+class FakeModels:
+    def __init__(self, ids=None, error=None):
+        self.ids, self.error = ids or [], error
+        from types import SimpleNamespace
+
+        self.models = SimpleNamespace(list=self._list)
+
+    def _list(self, **kwargs):
+        from types import SimpleNamespace
+
+        if self.error:
+            raise self.error
+        return SimpleNamespace(data=[SimpleNamespace(id=i) for i in self.ids])
+
+
+def test_unpinned_picks_first_preferred_model_the_key_can_use():
+    # The llama model 404'd for a real key: when it's absent, it's skipped.
+    client = FakeModels(["openai/gpt-oss-20b", "whisper-large-v3", "llama-3.1-8b-instant"])
+    model, note = coordinator.resolve_groq_model(client)
+    assert model == "openai/gpt-oss-20b" and "auto-selected" in note
+
+
+def test_unpinned_prefers_the_top_of_the_list_when_available():
+    client = FakeModels(coordinator.GROQ_MODEL_PREFERENCE[::-1])
+    assert coordinator.resolve_groq_model(client)[0] == coordinator.GROQ_MODEL_PREFERENCE[0]
+
+
+def test_pinned_model_is_kept_but_warned_about_when_unavailable():
+    client = FakeModels(["openai/gpt-oss-120b"])
+    model, note = coordinator.resolve_groq_model(client, "llama-3.3-70b-versatile")
+    assert model == "llama-3.3-70b-versatile"
+    assert "WARNING" in note and "not available to this key" in note and "openai/gpt-oss-120b" in note
+    assert coordinator.resolve_groq_model(client, "openai/gpt-oss-120b") == ("openai/gpt-oss-120b", "")
+
+
+def test_no_supported_model_means_offline_with_reason(monkeypatch):
+    fake = FakeModels(["whisper-large-v3"])
+    monkeypatch.setattr(groq_sdk, "Groq", lambda **kw: fake)
+    llm, description = coordinator.get_llm({"GROQ_API_KEY": FAKE_KEY})
+    assert llm is None and "none of the supported tool-use models" in description
+
+
+def test_model_list_failure_keeps_default_and_says_why(monkeypatch):
+    err = _status_error(401, {"error": {"message": "Invalid API Key", "code": "invalid_api_key"}})
+    monkeypatch.setattr(groq_sdk, "Groq", lambda **kw: FakeModels(error=err))
+    llm, description = coordinator.get_llm({"GROQ_API_KEY": FAKE_KEY})
+    assert llm.model == coordinator.GROQ_MODEL_PREFERENCE[0]
+    assert "model list unavailable: HTTP 401: invalid_api_key" in description
+    assert FAKE_KEY not in description
+
+
+def test_startup_check_selects_an_available_model(monkeypatch):
+    monkeypatch.setattr(groq_sdk, "Groq", lambda **kw: FakeModels(["llama-3.1-8b-instant"]))
+    llm, description = coordinator.get_llm({"GROQ_API_KEY": FAKE_KEY})
+    assert llm.model == "llama-3.1-8b-instant"
+    assert description == "groq / llama-3.1-8b-instant (auto-selected: available to this key)"

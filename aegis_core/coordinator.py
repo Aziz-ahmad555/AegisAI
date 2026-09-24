@@ -24,9 +24,14 @@ MAX_TOKENS = 16000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 USE_FALLBACKS = os.environ.get("AEGISAI_CLAUDE_FALLBACKS", "true").lower() == "true"
 
-# Groq: a production (not preview) model with tool-use support, per Groq's
-# models + tool-use docs (verified 2026-09-24).
-GROQ_MODEL = os.environ.get("AEGISAI_GROQ_MODEL", "llama-3.3-70b-versatile")
+# Groq: production (not preview) models with tool-use support, per Groq's
+# models + tool-use docs (2026-09-24), in order of preference. Availability
+# differs per account and models get retired (a hard-coded llama-3.3-70b-
+# versatile returned 404 model_not_found in practice), so unless
+# AEGISAI_GROQ_MODEL pins one, startup picks the first model this key can
+# actually use (AEGISAI_GROQ_CHECK_MODELS=false skips the check).
+GROQ_MODEL_PREFERENCE = ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b", "llama-3.1-8b-instant"]
+GROQ_MODEL = os.environ.get("AEGISAI_GROQ_MODEL") or GROQ_MODEL_PREFERENCE[0]
 GROQ_MAX_TOKENS = 4096
 
 MAX_TOOL_ROUNDS = 5
@@ -69,14 +74,43 @@ def get_llm(env=None):
         if provider == "groq":
             import groq
 
-            llm = LLM("groq", GROQ_MODEL,
-                      groq.Groq(api_key=env["GROQ_API_KEY"], timeout=REQUEST_TIMEOUT, max_retries=2))
-        else:
-            llm = LLM("claude", MODEL,
-                      anthropic.Anthropic(api_key=env["ANTHROPIC_API_KEY"], timeout=REQUEST_TIMEOUT, max_retries=2))
+            client = groq.Groq(api_key=env["GROQ_API_KEY"], timeout=REQUEST_TIMEOUT, max_retries=2)
+            model, note = GROQ_MODEL, ""
+            if (env.get("AEGISAI_GROQ_CHECK_MODELS") or "true").lower() == "true":
+                model, note = resolve_groq_model(client, env.get("AEGISAI_GROQ_MODEL") or None)
+                if model is None:
+                    return None, f"offline (groq: {note})"
+            llm = LLM("groq", model, client)
+            return llm, llm.describe() + note
+        llm = LLM("claude", MODEL,
+                  anthropic.Anthropic(api_key=env["ANTHROPIC_API_KEY"], timeout=REQUEST_TIMEOUT, max_retries=2))
     except Exception as e:      # e.g. the groq package isn't installed
         return None, f"offline ({provider} client could not start: {type(e).__name__})"
     return llm, llm.describe()
+
+
+def resolve_groq_model(client, pinned=None):
+    """
+    (model, note) for Groq, based on the models this key can actually use.
+    Pinned (AEGISAI_GROQ_MODEL): kept, with a warning if unavailable.
+    Unpinned: the first available model from GROQ_MODEL_PREFERENCE.
+    If the list can't be fetched, fall back to the configured default and
+    say so - the chat's per-request error notice covers the rest.
+    """
+    try:
+        available = {m.id for m in client.models.list(timeout=10.0).data}
+    except Exception as e:
+        return pinned or GROQ_MODEL_PREFERENCE[0], f" (model list unavailable: {_error_detail(e) or type(e).__name__})"
+    if pinned:
+        if pinned in available:
+            return pinned, ""
+        usable = [m for m in GROQ_MODEL_PREFERENCE if m in available]
+        hint = f"; available: {', '.join(usable)}" if usable else ""
+        return pinned, f" (WARNING: AEGISAI_GROQ_MODEL {pinned!r} is not available to this key{hint})"
+    for model in GROQ_MODEL_PREFERENCE:
+        if model in available:
+            return model, " (auto-selected: available to this key)"
+    return None, "none of the supported tool-use models is available to this key"
 
 
 def get_client():

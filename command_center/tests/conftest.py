@@ -7,6 +7,9 @@ os.environ["AEGISAI_CLOUD_MODE"] = "true"
 os.environ.pop("ANTHROPIC_API_KEY", None)  # always exercise the offline coordinator path
 os.environ.pop("GROQ_API_KEY", None)
 os.environ.pop("AEGISAI_LLM_PROVIDER", None)
+# Never call the real Groq models API from tests.
+os.environ["AEGISAI_GROQ_CHECK_MODELS"] = "false"
+os.environ.pop("AEGISAI_GROQ_MODEL", None)
 
 # Cloud mode refuses to start without a real secret key and a hashed password,
 # so the test app is configured the way a proper deployment would be.
