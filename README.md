@@ -22,18 +22,37 @@ pip install -e ..
 python app.py
 ```
 
-Open http://127.0.0.1:5000 and log in (default operator / aegisai2026, configurable via AEGISAI_USERNAME / AEGISAI_PASSWORD). Requires the trained models copied in as fire_smoke_model.pt and an ANTHROPIC_API_KEY for full LLM-based chat routing (falls back to keyword-based routing otherwise). All environment variables are documented in `command_center/.env.example`.
+Open http://127.0.0.1:5000 and log in with **operator / aegisai2026** (the local demo default; nothing to configure). Requires the trained models copied in as fire_smoke_model.pt and an ANTHROPIC_API_KEY for full LLM-based chat routing (falls back to keyword-based routing otherwise). All environment variables are documented in `command_center/.env.example`.
 
 `pip install -e ..` installs the shared `aegis_core` package (the domain logic the app runs on) in editable mode.
 
-For a hosted deployment without a camera, install `requirements-cloud.txt` instead (no torch/ultralytics/opencv), set `AEGISAI_CLOUD_MODE=true`, and serve with gunicorn from the repo root:
+### Using your own password
+
+Only a hash of the password is stored. Generate it (you're prompted; nothing is echoed or kept in shell history):
+
+```
+python -c "import getpass; from werkzeug.security import generate_password_hash as h; print(h(getpass.getpass()))"
+```
+
+Set the output as `AEGISAI_PASSWORD_HASH`, in **single quotes** because the hash contains `$`:
+
+```
+$env:AEGISAI_PASSWORD_HASH = 'scrypt:32768:8:1$...'      # PowerShell
+export AEGISAI_PASSWORD_HASH='scrypt:32768:8:1$...'      # bash
+```
+
+Then log in as `operator` (or `AEGISAI_USERNAME`) with your password. Five failed logins from one address lock that address out for up to 5 minutes.
+
+### Hosted deployment (cloud mode)
+
+For a hosted deployment without a camera, install `requirements-cloud.txt` instead (no torch/ultralytics/opencv), set `AEGISAI_CLOUD_MODE=true`, and serve with gunicorn from the repo root. Cloud mode **refuses to start** unless `AEGISAI_SECRET_KEY` (32+ chars: `python -c "import secrets; print(secrets.token_hex(32))"`) and `AEGISAI_PASSWORD_HASH` are set, and it tells you which is missing. Set `AEGISAI_TRUST_PROXY=true` behind a hosting proxy.
 
 ```
 pip install -r command_center/requirements-cloud.txt && pip install .
 gunicorn -k gthread -w 1 --threads 50 --chdir command_center -b 0.0.0.0:$PORT app:app
 ```
 
-Development: `pip install -r command_center/requirements-dev.txt`, then from the repo root run `python -m pytest` (101 tests) and `ruff check aegis_core command_center`. `pre-commit install` runs ruff on every commit. CI runs both on every push.
+Development: `pip install -r command_center/requirements-dev.txt`, then from the repo root run `python -m pytest` (127 tests) and `ruff check aegis_core command_center`. `pre-commit install` runs ruff on every commit. CI runs both on every push.
 
 See [ROADMAP.md](ROADMAP.md) for the ongoing polish and upgrade plan.
 

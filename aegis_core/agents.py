@@ -86,7 +86,7 @@ class MedicalAgent:
                     "severity": r["severity"],
                     "reported_minutes_ago": _ago(r["ts"]),
                     "verified": r["verified"],
-                    "report": r["text"],
+                    "report_text_untrusted": r["text"],
                 })
         fire_zones = set(self.system.status()["fire_zones"])
         return {

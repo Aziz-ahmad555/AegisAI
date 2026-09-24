@@ -76,14 +76,14 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 4 — Security hardening
 
-- [ ] Refuse to start in cloud mode with default password / secret key.
-- [ ] Hash operator password (werkzeug `generate_password_hash`), constant-time compare.
-- [ ] Login rate limiting / lockout.
-- [ ] CSRF protection on the login form and JSON POST endpoints.
-- [ ] Restrict Socket.IO CORS to the app's own origin.
-- [ ] Input size limits on `/api/chat` and `/api/analyze_report`; validate zone/room names on socket events.
-- [ ] Secure session cookies (`HttpOnly`, `SameSite`, `Secure` in cloud mode); security headers.
-- [ ] Prompt-injection guard: the coordinator treats report text as data, never instructions.
+- [x] Refuse to start in cloud mode without a real secret key (32+ chars) and a password hash; local mode keeps the zero-setup demo login.
+- [x] Hashed operator password (`AEGISAI_PASSWORD_HASH`, one-line generator in README/.env.example), constant-time compare, session cleared on login/logout.
+- [x] Login rate limiting: 5 failures / 5 min per client address -> 429 + Retry-After; `AEGISAI_TRUST_PROXY` for real client IPs behind a proxy.
+- [x] CSRF protection on the login form and all POST endpoints (session token; header added to every fetch()).
+- [x] Socket.IO restricted to the app's own origin (`AEGISAI_ALLOWED_ORIGINS` to extend); verified a foreign origin is rejected.
+- [x] Input size limits (64 KB body, 2000-char reports, 1000-char questions); zone/room names validated on socket events.
+- [x] Session cookies HttpOnly + SameSite=Lax (+ Secure in cloud mode); nosniff, X-Frame-Options, Referrer-Policy, Content-Security-Policy.
+- [x] Prompt-injection guard: caller text reaches the LLM only in fields marked `_untrusted`, and the coordinator prompt forbids acting on it (tested). A red-team pass belongs with the Stage 5 LLM work.
 
 ## Stage 5 — LLM & agent upgrades
 
