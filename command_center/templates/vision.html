@@ -69,7 +69,11 @@
         fetch("/api/vision_info")
             .then(function(res) { return res.json(); })
             .then(function(data) {
-                document.getElementById("status-line").innerText = data.detail || "Running";
+                var line = data.detail || "Running";
+                if (data.fps) {
+                    line += "  ·  " + data.fps.toFixed(1) + " fps  ·  " + data.latency_ms + " ms";
+                }
+                document.getElementById("status-line").innerText = line;
             })
             .catch(function() {});
     }

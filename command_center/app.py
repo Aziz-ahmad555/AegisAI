@@ -1,6 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
-
 import os
 import threading
 import time
@@ -15,7 +12,13 @@ from vision_stream import VisionStream
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+# Threading mode (real OS threads) rather than eventlet: eventlet's green
+# threads all share one OS thread, so every CPU-bound YOLO inference froze the
+# whole server - video stream, WebSocket pushes and page loads - until it
+# finished. PyTorch and OpenCV release the GIL during inference, so plain
+# threads let vision and the web server genuinely run in parallel.
+# Production: gunicorn -k gthread -w 1 --threads 16 app:app
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # When true (set via env var on the hosted deployment), Live Vision is hidden
 # entirely rather than attempting to stream from a camera that doesn't exist
@@ -250,4 +253,4 @@ if __name__ == "__main__":
     print("AegisAI Command Center")
     print(f"Login with username '{OPERATOR_USERNAME}' (set AEGISAI_USERNAME/AEGISAI_PASSWORD env vars to change)")
     print("Open http://127.0.0.1:5000 in your browser")
-    socketio.run(app, host="127.0.0.1", port=5000, debug=False)
+    socketio.run(app, host="127.0.0.1", port=5000, debug=False, allow_unsafe_werkzeug=True)
