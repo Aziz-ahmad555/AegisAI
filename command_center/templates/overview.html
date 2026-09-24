@@ -24,7 +24,7 @@
         <section class="card card-tight" aria-labelledby="figures-title">
             <h3 class="card-title" id="figures-title">Live figures</h3>
             <div class="stats">
-                <div class="stat"><div class="stat-label">Building risk</div><div class="stat-value" id="fig-building">&ndash;</div><div class="stat-sub">mean zone risk</div></div>
+                <div class="stat"><div class="stat-label">Highest zone risk</div><div class="stat-value" id="fig-building">&ndash;</div><div class="stat-sub" id="fig-building-sub">&nbsp;</div></div>
                 <div class="stat"><div class="stat-label">Sensor risk</div><div class="stat-value" id="fig-sensor">&ndash;</div><div class="stat-sub" id="fig-trend">&nbsp;</div></div>
                 <div class="stat"><div class="stat-label">Zones on fire</div><div class="stat-value" id="fig-fires">&ndash;</div><div class="stat-sub">of 8 occupiable</div></div>
                 <div class="stat"><div class="stat-label">Blocked links</div><div class="stat-value" id="fig-blocked">&ndash;</div><div class="stat-sub">corridor connections</div></div>
@@ -69,7 +69,7 @@
 <script>
 (function () {
     var socket = window.aegisSocket;
-    var esc = function (v) { return window.aegisEscape ? window.aegisEscape(v) : String(v); };
+    var esc = window.aegisEscape;
     var live = { fires: [], risk: {}, pending: [], sensor: null };
 
     function renderIncidents() {
@@ -102,7 +102,14 @@
 
     socket.on("state_update", function (st) {
         live.fires = st.nodes.filter(function (n) { return n.status === "FIRE"; }).map(function (n) { return n.id; });
-        document.getElementById("fig-building").textContent = st.overall_risk.toFixed(1);
+        // Worst zone, not the mean: one fire among ten zones must not read as "normal".
+        var worst = st.nodes.reduce(function (a, n) { return n.risk > a.risk ? n : a; }, { id: null, risk: 0 });
+        var lvl = worst.risk < 20 ? "NORMAL" : worst.risk < 45 ? "ELEVATED" : worst.risk < 70 ? "HIGH" : "CRITICAL";
+        var fig = document.getElementById("fig-building");
+        fig.textContent = worst.risk.toFixed(1);
+        fig.className = "stat-value lvl-" + lvl;
+        document.getElementById("fig-building-sub").textContent =
+            (worst.risk > 0 ? worst.id + " · " : "") + "mean " + st.overall_risk.toFixed(1);
         document.getElementById("fig-fires").textContent = live.fires.length;
         document.getElementById("fig-fires").className = "stat-value" + (live.fires.length ? " lvl-CRITICAL" : "");
         document.getElementById("fig-blocked").textContent = st.blocked_edges.length;

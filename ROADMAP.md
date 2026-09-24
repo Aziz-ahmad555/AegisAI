@@ -19,9 +19,9 @@ Tasks:
 - [x] The MJPEG generator waits on a frame-ready condition instead of a fixed sleep, so new frames go out immediately.
 - [x] Cap PyTorch threads so inference doesn't starve the web server; warm up models at startup so the first frame isn't slow.
 - [x] Show live FPS + end-to-end latency in the vision status line (measured, not guessed).
-- [ ] Serve static assets with cache headers; self-host / preconnect fonts; defer non-critical JS.
-- [ ] Only broadcast state over WebSocket when it actually changed (twin) and throttle sensor broadcasts per page.
-- [ ] Lazy-load heavy page components (3D hero on Overview) so first paint is instant.
+- [x] Static assets cached (1 h, URL-versioned by file mtime so edits show up at once); fonts and all JS libraries self-hosted; the 3D map's library lazy-loads.
+- [x] Twin state is only re-broadcast when it changes (sensor readings still stream every 2 s by design).
+- [x] The Overview 3D map loads three.js only when scrolled into view.
 - [x] Cloud mode never imports the vision stack (lazy import)
 - [x] Production server config — decided and verified (see **Production server** below).
 - [x] Live Vision tracking thresholds configurable (`AEGISAI_TRACK_CONF`, `AEGISAI_INFER_SIZE`, `AEGISAI_TRACK_MODEL`); overlay no longer collides with box labels; `tools/diagnose_detections.py` for raw per-class confidence + latency.
@@ -96,16 +96,18 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 6 — Frontend redesign & UX
 
-- [ ] Shared design system: CSS tokens, type scale, spacing, component classes (cards, buttons, badges, stat tiles, tables) in one static stylesheet instead of per-page `<style>` blocks.
-- [ ] Global live status bar (risk level, active incidents, connection state, LLM online/offline).
-- [ ] Toast notifications for new critical events on every page.
-- [ ] Real loading / empty / error / reconnecting states on every screen.
-- [ ] Responsive layout (tablet + phone), collapsible sidebar.
-- [ ] Light theme toggle in addition to the dark theme.
-- [ ] Keyboard command palette (Ctrl+K) for navigation and quick actions.
-- [ ] Micro-interactions: animated risk gauges, smooth graph transitions, route path animation.
-- [ ] Accessibility: focus states, ARIA labels, contrast checks, reduced-motion support.
-- [ ] Polished login screen.
+- [x] Chat renders model Markdown safely: server-side markdown-it (raw HTML off) + nh3 allowlist, no images, safe links; streamed as sanitized HTML; XSS payloads tested in pytest and in a real browser (nothing executed).
+
+- [x] Shared design system (`static/css/aegis.css`): tokens, 4px spacing scale, type scale (12px min), components; no per-page `<style>` blocks remain. Red reserved for danger states (tested).
+- [x] Global status bar on every page: threat level first, active fires, alerts awaiting confirmation, sensors, link + chat LLM.
+- [x] Toast notifications for warnings/critical events on every page.
+- [x] Loading / empty / error / link-down states on the live screens (incidents, timeline, report analyzer, chat, vision).
+- [x] Responsive layout (sidebar becomes a scrolling top nav below 900px; verified no horizontal overflow at 375px).
+- [ ] Light theme toggle in addition to the dark theme. *(not started - dark-only by design choice for now)*
+- [ ] Keyboard command palette (Ctrl+K) for navigation and quick actions. *(not started)*
+- [ ] Micro-interactions: animated risk gauges, smooth graph transitions, route path animation. *(not started)*
+- [x] Accessibility basics: visible focus, labelled controls/regions, 4.5:1 text contrast, reduced-motion support. (No full audit yet.)
+- [x] Polished login screen.
 
 ## Stage 7 — Demo experience
 

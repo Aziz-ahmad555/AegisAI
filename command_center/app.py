@@ -99,6 +99,19 @@ app.before_request(security.verify_csrf)
 app.after_request(security.add_security_headers)
 
 
+@app.url_defaults
+def static_cache_bust(endpoint, values):
+    # Static files are cached for an hour; versioning each URL by the file's
+    # modification time means an edited CSS/JS file gets a new URL at once,
+    # while unchanged files keep being served from the browser cache.
+    if endpoint == "static" and "filename" in values:
+        path = os.path.join(app.static_folder, values["filename"])
+        try:
+            values["v"] = int(os.stat(path).st_mtime)
+        except OSError:
+            pass
+
+
 @app.errorhandler(400)
 @app.errorhandler(413)
 @app.errorhandler(429)

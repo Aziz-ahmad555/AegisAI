@@ -20,8 +20,9 @@
 
     <div class="stack">
         <section class="card card-tight" aria-labelledby="risk-title">
-            <h3 class="card-title" id="risk-title">Building risk</h3>
+            <h3 class="card-title" id="risk-title">Highest zone risk</h3>
             <div class="row"><span class="risk-figure lvl-NORMAL" id="risk-value">0.0</span><span class="badge badge-NORMAL" id="risk-level">NORMAL</span></div>
+            <div class="faint" id="risk-sub" style="font-size: 13px; margin-top: var(--s2);">&nbsp;</div>
         </section>
 
         <section class="card card-tight" aria-labelledby="route-title">
@@ -29,7 +30,7 @@
             <div class="row" style="flex-wrap: nowrap;">
                 <label class="sr-only" for="room-select">Start room</label>
                 <select class="field" id="room-select"></select>
-                <button class="btn btn-primary" id="route-btn">Find route</button>
+                <button class="btn btn-primary" id="route-btn" style="white-space: nowrap; flex-shrink: 0;">Find route</button>
             </div>
             <div id="route-display"></div>
         </section>
@@ -127,7 +128,7 @@
             c.setAttribute("stroke-width", route && route[0] === n.id ? "4" : "2");
             if (route && route[0] === n.id) c.setAttribute("stroke", "#e8a33d");
             svg.appendChild(c);
-            if (!isExit && n.risk > 0) {
+            if (!isExit && (n.status === "FIRE" || n.risk >= 20)) {     // label only elevated zones
                 var r = document.createElementNS(NS, "text");
                 r.setAttribute("x", n.x * SCALE); r.setAttribute("y", n.y * SCALE + 4);
                 r.setAttribute("class", "node-risk");
@@ -144,13 +145,18 @@
 
     socket.on("state_update", function (st) {
         state = st;
-        var risk = st.overall_risk, lvl = level(risk);
+        // Headline the worst zone, not the building-wide mean: one fire among
+        // ten zones averages to "NORMAL", which is exactly wrong in an emergency.
+        var worst = st.nodes.reduce(function (a, n) { return n.risk > a.risk ? n : a; }, { id: null, risk: 0 });
+        var lvl = level(worst.risk);
         var val = document.getElementById("risk-value");
-        val.textContent = risk.toFixed(1);
+        val.textContent = worst.risk.toFixed(1);
         val.className = "risk-figure lvl-" + lvl;
         var badge = document.getElementById("risk-level");
         badge.textContent = lvl;
         badge.className = "badge badge-" + lvl;
+        document.getElementById("risk-sub").textContent =
+            (worst.id && worst.risk > 0 ? "in " + worst.id + " · " : "") + "building mean " + st.overall_risk.toFixed(1);
         var fires = st.nodes.filter(function (n) { return n.status === "FIRE"; }).map(function (n) { return n.id; });
         document.getElementById("map-status").textContent = fires.length
             ? fires.length + " zone" + (fires.length > 1 ? "s" : "") + " on fire · " + st.blocked_edges.length + " connections blocked"

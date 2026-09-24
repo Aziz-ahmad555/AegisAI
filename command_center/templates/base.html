@@ -25,6 +25,13 @@
                 return nativeFetch(url, opts);
             };
         })();
+        // HTML-escape for any server/user text put into innerHTML. Defined here,
+        // before page scripts, so they can capture it at load time.
+        window.aegisEscape = function (value) {
+            return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+                return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+            });
+        };
         // One shared real-time connection per page; page scripts reuse it.
         window.aegisSocket = io();
     </script>

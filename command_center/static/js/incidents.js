@@ -5,12 +5,7 @@
     var socket = window.aegisSocket;
     if (!socket) return;
 
-    function esc(value) {
-        return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
-            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-        });
-    }
-    window.aegisEscape = esc;
+    var esc = window.aegisEscape;   // defined in base.html <head>
 
     // ----- pending actions -------------------------------------------------
     var tray = document.createElement("div");

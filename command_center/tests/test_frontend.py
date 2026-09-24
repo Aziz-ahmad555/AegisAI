@@ -64,3 +64,9 @@ def test_red_is_reserved_for_danger_in_the_stylesheet():
         if "var(--danger" in body and not any(word in selector for word in allowed):
             offenders.append(selector.strip())
     assert offenders == []
+
+
+def test_static_urls_are_versioned_for_cache_busting(authed):
+    html = authed.get("/").get_data(as_text=True)
+    assert re.search(r'/static/css/aegis\.css\?v=\d+', html)
+    assert re.search(r'/static/js/status\.js\?v=\d+', html)
