@@ -68,8 +68,11 @@
                 <div class="status-cell" id="cell-fires"><span class="k">Active fires</span><span class="v" id="status-fires">&ndash;</span></div>
                 <div class="status-cell" id="cell-pending"><span class="k">Awaiting confirmation</span><span class="v" id="status-pending">&ndash;</span></div>
                 <div class="status-cell"><span class="k">Sensors</span><span class="v" id="status-sensors">&ndash;</span></div>
-                <div class="status-cell status-conn"><span class="k">Link &middot; Chat LLM</span>
-                    <span class="v"><span class="conn-dot offline" id="conn-dot"></span><span id="conn-text">connecting</span> &middot; <span class="mono">{{ llm_label }}</span></span>
+                <div class="status-cell status-conn"><span class="k">Live link</span>
+                    <span class="v"><span class="conn-dot offline" id="conn-dot"></span><span id="conn-text">connecting</span></span>
+                </div>
+                <div class="status-cell{% if llm_label == 'offline' %} is-warn{% endif %}"><span class="k">Chat LLM</span>
+                    <span class="v mono">{{ llm_label if llm_label != 'offline' else 'offline - keyword routing' }}</span>
                 </div>
             </div>
         </header>
