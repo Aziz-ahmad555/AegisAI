@@ -1,4 +1,5 @@
 import os
+import tempfile
 import threading
 import time
 
@@ -11,6 +12,60 @@ from ultralytics import YOLO
 # grabs every core for a single inference, which makes the rest of the app
 # stutter while a frame is being processed.
 torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
+
+
+def _env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+# Tracking-mode visibility threshold. In tracking mode Ultralytics runs the
+# detector at conf=0.1 and hands everything to ByteTrack; what actually
+# decides whether an object gets a box is ByteTrack's new_track_thresh /
+# track_high_thresh (stock value 0.25). This one setting drives both.
+TRACK_CONF = _env_float("AEGISAI_TRACK_CONF", 0.25)
+# Detector input size. Larger finds smaller/harder objects but costs latency.
+INFER_SIZE = _env_int("AEGISAI_INFER_SIZE", 320)
+# COCO-trained general model used for tracking (yolov8n.pt / yolov8s.pt ...).
+TRACK_MODEL = os.environ.get("AEGISAI_TRACK_MODEL", "yolov8n.pt")
+
+
+def _write_tracker_config(conf):
+    # Same as Ultralytics' stock bytetrack.yaml except the two thresholds
+    # that gate whether a detection becomes / stays a confident track.
+    cfg = (
+        "tracker_type: bytetrack\n"
+        f"track_high_thresh: {conf}\n"
+        "track_low_thresh: 0.1\n"
+        f"new_track_thresh: {conf}\n"
+        "track_buffer: 30\n"
+        "match_thresh: 0.8\n"
+        "fuse_score: True\n"
+    )
+    fd, path = tempfile.mkstemp(prefix="aegis_bytetrack_", suffix=".yaml")
+    with os.fdopen(fd, "w") as f:
+        f.write(cfg)
+    return path
+
+
+def _draw_status(frame, text, color):
+    # Status banner in the bottom-left on a dark plate, so it never collides
+    # with YOLO's box labels, which are drawn at the top-left of each box.
+    font, scale, thickness = cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1
+    (tw, th), baseline = cv2.getTextSize(text, font, scale, thickness)
+    h = frame.shape[0]
+    x, y = 8, h - 10
+    cv2.rectangle(frame, (x - 6, y - th - 8), (x + tw + 6, y + baseline + 2), (15, 15, 15), -1)
+    cv2.putText(frame, text, (x, y), font, scale, color, thickness, cv2.LINE_AA)
 
 
 class VisionStream:
@@ -35,13 +90,15 @@ class VisionStream:
     """
 
     MODES = ["tracking", "fire_smoke", "fall_detection"]
-    STREAM_WIDTH = 480
-    INFER_SIZE = 320
+    INFER_SIZE = INFER_SIZE
+    # Never downscale below what the detector will look at.
+    STREAM_WIDTH = max(480, INFER_SIZE)
     JPEG_QUALITY = 70
     IDLE_FPS = 4
 
     def __init__(self):
-        self.general_model = YOLO("yolov8n.pt")
+        self.general_model = YOLO(TRACK_MODEL)
+        self.tracker_config = _write_tracker_config(TRACK_CONF)
         self.fire_model = YOLO("fire_smoke_model.pt")
         self.pose_model = None
 
@@ -127,12 +184,20 @@ class VisionStream:
     # ----- detection modes -------------------------------------------------
 
     def _process_tracking(self, frame):
-        results = self.general_model.track(frame, imgsz=self.INFER_SIZE, persist=True, verbose=False)
+        results = self.general_model.track(
+            frame, imgsz=self.INFER_SIZE, persist=True, verbose=False, tracker=self.tracker_config
+        )
+        boxes = results[0].boxes
         annotated = results[0].plot()
-        count = len(results[0].boxes) if results[0].boxes is not None else 0
-        cv2.putText(annotated, f"Objects tracked: {count}", (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        return annotated, f"{count} objects tracked"
+        count = len(boxes) if boxes is not None else 0
+        noun = "object" if count == 1 else "objects"
+        detail = f"{count} {noun} tracked"
+        if count:
+            names = results[0].names
+            labels = sorted({names[int(c)] for c in boxes.cls.tolist()})
+            detail += ": " + ", ".join(labels)
+        _draw_status(annotated, f"{count} {noun} tracked", (0, 255, 0))
+        return annotated, detail
 
     def _process_fire_smoke(self, frame):
         results = self.fire_model(frame, imgsz=self.INFER_SIZE, conf=0.55, verbose=False)
@@ -140,7 +205,7 @@ class VisionStream:
         fire_detected = results[0].boxes is not None and len(results[0].boxes) > 0
         label = "FIRE/SMOKE DETECTED" if fire_detected else "Zone clear"
         color = (0, 0, 255) if fire_detected else (0, 255, 0)
-        cv2.putText(annotated, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        _draw_status(annotated, label, color)
         return annotated, label
 
     def _process_fall_detection(self, frame):
@@ -170,7 +235,7 @@ class VisionStream:
 
         label = "POSSIBLE FALL DETECTED" if fall_detected else "Normal posture"
         color = (0, 0, 255) if fall_detected else (0, 255, 0)
-        cv2.putText(annotated, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        _draw_status(annotated, label, color)
         return annotated, label
 
     # ----- threads ---------------------------------------------------------
