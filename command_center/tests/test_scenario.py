@@ -54,6 +54,9 @@ def test_full_run_offline_plays_every_step_through_the_real_modules(system):
     assert any("confirmed" in m.lower() for m in msgs)
     assert ev.BRIEFING in types(system)
     assert runner.briefing.startswith("[OFFLINE MODE")              # works with no LLM at all
+    for agent in ("FireAgent", "MedicalAgent", "RouteAgent"):        # offline briefing covers all three
+        assert agent in runner.briefing
+    assert "2 people" in runner.briefing                            # the caller's trapped people
     final = states[-1]
     assert final["status"] == FINISHED and all(s["state"] == "done" for s in final["steps"])
 

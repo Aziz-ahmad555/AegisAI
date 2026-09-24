@@ -15,8 +15,11 @@ from .events import Event
 
 IDLE, RUNNING, PAUSED, FINISHED, STOPPED = "idle", "running", "paused", "finished", "stopped"
 
-BRIEFING_QUESTION = ("Give the operator a short situation briefing: where the fire is, how confident the "
-                     "evidence is, who is reported at risk, and which evacuation routes are blocked or isolated.")
+# Worded so offline keyword routing also consults all three agents
+# ("fire", "trapped"/"rescue", "evacuation"/"route").
+BRIEFING_QUESTION = ("Give the operator a short situation briefing: where the fire is and how confident the "
+                     "evidence is, who is trapped or needs rescue, and which evacuation routes are blocked "
+                     "or isolated.")
 
 
 class _Halt(Exception):
