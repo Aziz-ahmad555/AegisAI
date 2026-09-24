@@ -72,6 +72,20 @@ class SensorFusionState:
         with self.lock:
             self.simulator.trigger_event_manually()
 
+    def reset_to_baseline(self):
+        """Instantly return the simulated sensors to their calm baseline."""
+        with self.lock:
+            sim = self.simulator
+            sim.event_active = False
+            sim.current = dict(sim.baseline)
+            sim.target = dict(sim.baseline)
+            self.latest_reading = dict(sim.baseline)
+            self.latest_camera = {"fire": 0.0, "smoke": 0.0}
+            self.anomaly_hold_until = 0
+            self.latest_anomaly = False
+            self.latest_risk_score = 0.0
+            self.latest_risk_level = "NORMAL"
+
     def get_snapshot(self):
         with self.lock:
             return {

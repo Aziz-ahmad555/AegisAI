@@ -52,7 +52,10 @@
             <a href="/chat">Command Chat</a>
             <a href="/aerial">Aerial Search</a>
         </nav>
-        <div class="sidebar-foot"><a href="/logout">Sign out</a></div>
+        <div class="sidebar-foot">
+            <button class="btn btn-block btn-sm" id="scenario-run" type="button" title="Play a scripted fire incident end to end (simulated data)">Run demo scenario</button>
+            <a href="/logout" style="display: inline-block; margin-top: var(--s3);">Sign out</a>
+        </div>
     </aside>
 
     <div class="main">
@@ -77,6 +80,21 @@
             </div>
         </header>
 
+        <div class="scenario-banner" id="scenario-banner" role="region" aria-label="Guided scenario" aria-live="polite" hidden>
+            <span class="sc-label">SCENARIO &middot; SIMULATED</span>
+            <span class="sc-status">Running</span>
+            <div class="sc-main">
+                <div class="sc-step">Starting&hellip;</div>
+                <div class="sc-progress" aria-hidden="true"></div>
+                <div class="sc-extra"></div>
+            </div>
+            <div class="sc-controls">
+                <button class="btn btn-sm" data-cmd="pause" type="button">Pause</button>
+                <button class="btn btn-sm" data-cmd="stop" type="button">Stop</button>
+                <button class="btn btn-sm btn-primary" data-cmd="reset" type="button">Reset</button>
+            </div>
+        </div>
+
         <main class="content">
             {% block content %}{% endblock %}
         </main>
@@ -96,5 +114,6 @@
 </script>
 <script src="{{ url_for('static', filename='js/status.js') }}"></script>
 <script src="{{ url_for('static', filename='js/incidents.js') }}"></script>
+<script src="{{ url_for('static', filename='js/scenario.js') }}"></script>
 </body>
 </html>

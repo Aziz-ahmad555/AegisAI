@@ -5,6 +5,12 @@
     <p>Extracts event type, severity, location and casualty count from free-text reports. Fire reports that name a building zone propose a fire declaration for you to confirm.</p>
 </div>
 
+<section class="card card-tight msg-sim" id="scenario-report" hidden style="margin-bottom: var(--s4);">
+    <h3 class="card-title">Incoming report <span class="badge badge-sim">SIMULATED</span></h3>
+    <p id="scenario-report-text" style="margin: 0 0 var(--s2);"></p>
+    <div class="row" id="scenario-report-meta"></div>
+</section>
+
 <div class="grid grid-2">
     <section class="card" aria-labelledby="input-title">
         <h3 class="card-title" id="input-title">Incident report <span class="hint" id="char-count">0 / 2000</span></h3>
@@ -70,6 +76,18 @@
         })
         .finally(function () { btn.disabled = false; });
     }
+
+    // Guided scenario: show the caller report that just "arrived".
+    document.addEventListener("aegis:scenario", function (e) {
+        var st = e.detail, card = document.getElementById("scenario-report");
+        card.hidden = !(st.active && st.report);
+        if (!st.report) return;
+        document.getElementById("scenario-report-text").textContent = '"' + st.report.text + '"';
+        document.getElementById("scenario-report-meta").innerHTML =
+            st.report.event_types.map(function (t) { return '<span class="badge badge-info">' + esc(t) + '</span>'; }).join(" ") +
+            ' <span class="badge badge-' + esc(st.report.severity) + '">' + esc(st.report.severity) + '</span>' +
+            (st.report.people_count ? ' <span class="faint" style="font-size: 13px;">' + esc(st.report.people_count) + ' people</span>' : '');
+    });
 
     function render(d) {
         var events = d.event_types.map(function (e) {

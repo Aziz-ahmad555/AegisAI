@@ -412,3 +412,28 @@ label.lbl { display: block; margin-bottom: 6px; font-size: var(--fs-sm); color: 
     #action-tray, #toast-stack { width: calc(100% - 2 * var(--s4)); right: var(--s4); }
     .msg { max-width: 94%; }
 }
+
+/* ---------- guided scenario (always visibly SIMULATED) -------------------------------- */
+
+.scenario-banner {
+    position: sticky; top: 77px; z-index: 14; display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
+    padding: var(--s3) var(--s6); border-bottom: 1px solid rgba(91, 176, 221, 0.5);
+    background: repeating-linear-gradient(135deg, rgba(91, 176, 221, 0.16) 0 12px, rgba(91, 176, 221, 0.07) 12px 24px), var(--surface);
+}
+.sc-label {
+    font: 700 var(--fs-sm) var(--font-mono); letter-spacing: 0.1em; color: var(--bg); background: var(--info);
+    padding: 4px 10px; border-radius: var(--radius-sm);
+}
+.sc-status { font: 600 var(--fs-xs) var(--font-mono); color: var(--info); text-transform: uppercase; letter-spacing: 0.06em; }
+.sc-main { flex: 1; min-width: 220px; }
+.sc-step { font-weight: 600; }
+.sc-progress { display: flex; gap: 4px; margin: 6px 0 4px; }
+.sc-seg { flex: 1; height: 5px; border-radius: 3px; background: var(--line-strong); }
+.sc-seg.sc-done { background: var(--info); }
+.sc-seg.sc-active { background: var(--accent); }
+.sc-extra { font-size: var(--fs-sm); color: var(--text-dim); min-height: 1em; }
+.sc-controls { display: flex; gap: var(--s2); }
+.badge-sim { color: var(--info); background: var(--info-soft); border-color: rgba(91, 176, 221, 0.45); }
+.msg-sim { border-color: rgba(91, 176, 221, 0.6); }
+.sidebar-foot .btn { font-size: var(--fs-sm); }
+@media (max-width: 900px) { .scenario-banner { top: 0; padding: var(--s3) var(--s4); } }

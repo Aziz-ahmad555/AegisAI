@@ -130,6 +130,23 @@
     };
 
     appendMessage("Ready. Ask about active incidents, evacuation status, or medical needs.", "coordinator");
+
+    // Guided scenario: the agents' briefing appears here once per run, clearly
+    // labelled. briefing_html is server-sanitized (same pipeline as answers).
+    var shownBriefing = false;
+    document.addEventListener("aegis:scenario", function (e) {
+        var st = e.detail;
+        if (!st.active) { shownBriefing = false; return; }
+        if (st.briefing_html && !shownBriefing) {
+            shownBriefing = true;
+            var msg = bubble("coordinator");
+            msg.classList.add("msg-sim");
+            msg.innerHTML = '<div class="msg-agents"><span class="badge badge-sim">SIMULATED BRIEFING</span></div>' +
+                            '<div class="msg-body md"></div><div class="msg-meta">guided scenario</div>';
+            msg.querySelector(".msg-body").innerHTML = st.briefing_html;
+            win.scrollTop = win.scrollHeight;
+        }
+    });
 })();
 </script>
 {% endblock %}

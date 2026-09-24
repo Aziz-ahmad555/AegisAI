@@ -13,6 +13,7 @@ from aegis_core import coordinator
 from aegis_core.building_state import BuildingDigitalTwin
 from aegis_core.coordinator import init_agents
 from aegis_core.emergency_nlp import parse_emergency_report
+from aegis_core.scenario import ScenarioRunner
 from aegis_core.sensor_state import SensorFusionState
 from aegis_core.system import AegisSystem
 
@@ -362,9 +363,33 @@ def _push_event(event):
     # the current pending-action list so confirm/dismiss controls stay in sync.
     socketio.emit("timeline_event", event.to_dict())
     socketio.emit("pending_actions", system.pending_actions())
+    # Building state changed (from any source: operator, confirmed proposal,
+    # scenario, reset) -> push the twin now rather than on the next 2 s tick.
+    if event.type in ("FIRE_STARTED", "ZONE_CLEARED", "RESET"):
+        broadcast_twin_state()
 
 
 system.bus.subscribe(_push_event)
+
+
+# --- guided demo scenario -------------------------------------------------------
+
+def _scenario_payload(state):
+    # The briefing is model output (untrusted): it only ever leaves the server
+    # as sanitized HTML, same as chat answers.
+    state = dict(state)
+    briefing = state.pop("briefing", None)
+    state["briefing_html"] = safe_markdown.render(briefing) if briefing else None
+    return state
+
+
+scenario = ScenarioRunner(
+    system,
+    llm_provider=lambda: llm_client,     # offline routing if None or on any LLM failure
+    on_state=lambda state: socketio.emit("scenario_state", _scenario_payload(state)),
+    countdown=int(os.environ.get("AEGISAI_SCENARIO_COUNTDOWN", "10")),
+    time_scale=float(os.environ.get("AEGISAI_SCENARIO_TIME_SCALE", "1")),   # tests run it instantly
+)
 
 
 @socketio.on("connect")
@@ -380,6 +405,7 @@ def handle_connect(auth=None):
     emit("sensor_update", sensors.get_snapshot())
     emit("timeline", system.bus.timeline(limit=50))
     emit("pending_actions", system.pending_actions())
+    emit("scenario_state", _scenario_payload(scenario.state()))
 
 
 @socketio.on("trigger_fire")
@@ -476,6 +502,20 @@ def handle_chat_ask(data):
             socketio.emit("chat_event", {"type": "done"}, to=sid)
 
     socketio.start_background_task(run)
+
+
+@socketio.on("scenario_command")
+def handle_scenario_command(data):
+    if not session.get("logged_in"):
+        disconnect()
+        return
+    action = (data or {}).get("action")
+    commands = {"start": scenario.start, "pause": scenario.pause, "resume": scenario.resume,
+                "stop": scenario.stop, "reset": scenario.reset}
+    if action in commands:
+        # stop/reset can wait briefly for the worker thread; don't block the
+        # socket handler on it.
+        socketio.start_background_task(commands[action])
 
 
 @socketio.on("trigger_sensor_event")

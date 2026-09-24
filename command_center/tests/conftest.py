@@ -9,6 +9,8 @@ os.environ.pop("GROQ_API_KEY", None)
 os.environ.pop("AEGISAI_LLM_PROVIDER", None)
 # Never call the real Groq models API from tests.
 os.environ["AEGISAI_GROQ_CHECK_MODELS"] = "false"
+# Play the guided scenario instantly in tests.
+os.environ["AEGISAI_SCENARIO_TIME_SCALE"] = "0"
 os.environ.pop("AEGISAI_GROQ_MODEL", None)
 
 # Cloud mode refuses to start without a real secret key and a hashed password,

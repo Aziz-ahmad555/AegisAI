@@ -47,6 +47,10 @@ class AegisSystem:
         self._camera_active = False
         self._sensor_level = "NORMAL"
         self._sensor_anomaly = False
+        # Guided scenario hooks: a scripted camera reading (fire, smoke) that
+        # replaces the live camera, and the zone that camera is watching.
+        self.simulated_camera = None
+        self._camera_zone_override = None
 
     # ----- zones -----------------------------------------------------------
 
@@ -54,9 +58,11 @@ class AegisSystem:
     def sensor_zone():
         return SENSOR_ZONE
 
-    @staticmethod
-    def camera_zone():
-        return CAMERA_ZONE
+    def camera_zone(self):
+        return self._camera_zone_override or CAMERA_ZONE
+
+    def set_camera_zone(self, zone):
+        self._camera_zone_override = zone
 
     def zones(self):
         return list(self.twin.graph.nodes())
@@ -120,48 +126,71 @@ class AegisSystem:
         with self._lock:
             return sorted(self._pending.values(), key=lambda p: p["ts"])
 
-    def decide(self, proposal_id, approve):
+    def decide(self, proposal_id, approve, decided_by="operator"):
         with self._lock:
             proposal = self._pending.pop(proposal_id, None)
         if proposal is None:
             return None
         zone = proposal["zone"]
+        who = "Operator" if decided_by == "operator" else decided_by.capitalize()
         if approve:
-            self.bus.publish(Event(ev.ACTION_CONFIRMED, "operator",
-                                   f"Operator confirmed: {proposal['reason']}", zone=zone,
+            self.bus.publish(Event(ev.ACTION_CONFIRMED, decided_by,
+                                   f"{who} confirmed: {proposal['reason']}", zone=zone,
                                    data={"proposal_id": proposal_id}))
             if proposal["action"] == "declare_fire":
-                self.start_fire(zone, source="operator",
+                self.start_fire(zone, source=decided_by,
                                 reason=f"Fire declared in {zone} (confirmed from {proposal['source']})")
         else:
-            self.bus.publish(Event(ev.ACTION_DISMISSED, "operator",
-                                   f"Operator dismissed: {proposal['reason']}", zone=zone,
+            self.bus.publish(Event(ev.ACTION_DISMISSED, decided_by,
+                                   f"{who} dismissed: {proposal['reason']}", zone=zone,
                                    data={"proposal_id": proposal_id}))
         return proposal
+
+    def reset_to_normal(self, source="scenario"):
+        """Return the building to a calm baseline: no fires, no pending
+        proposals, no reports, sensors at baseline, no scripted camera."""
+        with self._lock:
+            self._pending.clear()
+            self._reports.clear()
+        self.simulated_camera = None
+        self._camera_zone_override = None
+        self._camera_active = False
+        for zone in self.zones():
+            if self.twin.zone_status.get(zone) == "FIRE":
+                self.twin.clear_zone(zone)
+            self.twin.set_zone_risk(zone, 0.0)
+        self.sensors.reset_to_baseline()
+        self._sensor_level = "NORMAL"
+        self._sensor_anomaly = False
+        self.bus.publish(Event(ev.RESET, source, "Returned to normal: fires cleared, alerts withdrawn, sensors at baseline"))
 
     # ----- camera -> fusion --------------------------------------------------
 
     def camera_confidence(self):
-        """(fire, smoke) confidence from Live Vision, 0 when no fresh detection."""
+        """(fire, smoke) confidence from Live Vision (or the scenario's scripted
+        camera), 0 when there's no fresh detection."""
+        if self.simulated_camera is not None:
+            return self.simulated_camera
         if self.vision is None:
             return 0.0, 0.0
         return self.vision.latest_fire_smoke()
 
     def _check_camera(self, fire, smoke):
         conf = max(fire, smoke)
+        zone = self.camera_zone()
         if not self._camera_active and conf >= CAMERA_ON:
             self._camera_active = True
             kind = "Fire" if fire >= smoke else "Smoke"
             self.bus.publish(Event(ev.CAMERA_FIRE, "vision",
-                                   f"{kind} detected on camera watching {CAMERA_ZONE}",
-                                   severity="warning", zone=CAMERA_ZONE, confidence=round(conf, 2)))
-            self.propose("declare_fire", CAMERA_ZONE,
-                         f"Camera detected {kind.lower()} in {CAMERA_ZONE} - declare fire?",
+                                   f"{kind} detected on camera watching {zone}",
+                                   severity="warning", zone=zone, confidence=round(conf, 2)))
+            self.propose("declare_fire", zone,
+                         f"Camera detected {kind.lower()} in {zone} - declare fire?",
                          source="vision", confidence=round(conf, 2))
         elif self._camera_active and conf < CAMERA_OFF:
             self._camera_active = False
             self.bus.publish(Event(ev.CAMERA_CLEAR, "vision",
-                                   f"Camera no longer sees fire/smoke in {CAMERA_ZONE}", zone=CAMERA_ZONE))
+                                   f"Camera no longer sees fire/smoke in {zone}", zone=zone))
 
     # ----- sensors -> twin ---------------------------------------------------
 

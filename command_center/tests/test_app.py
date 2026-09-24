@@ -212,3 +212,62 @@ def test_successful_groq_stream_is_not_replaced_by_the_offline_answer(client, mo
     second_request = llm.client.requests[-1]["messages"]
     assert {"role": "user", "content": "is there any fire right now?"} in second_request
     sio.disconnect()
+
+
+# --- guided scenario over Socket.IO ---------------------------------------------------------
+
+def _scenario_states(sio, until_status, timeout=15.0):
+    import time
+
+    states, deadline = [], time.time() + timeout
+    while time.time() < deadline:
+        for m in sio.get_received():
+            if m["name"] == "scenario_state":
+                states.append(m["args"][0])
+                if states[-1]["status"] == until_status:
+                    return states
+        time.sleep(0.02)
+    raise AssertionError(f"scenario never reached {until_status}: {[s['status'] for s in states]}")
+
+
+def test_scenario_runs_over_the_socket_and_briefing_arrives_sanitized(client, monkeypatch):
+    from fakes import groq, groq_text
+
+    evil = "**Fire in CorridorB.** <img src=x onerror=alert(1)> ![p](https://attacker.example/x)"
+    monkeypatch.setattr(aegis, "llm_client", groq([groq_text(evil)]))
+    login(client)
+    sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    first = [m["args"][0] for m in sio.get_received() if m["name"] == "scenario_state"]
+    assert first and first[0]["status"] == "idle" and first[0]["active"] is False
+
+    sio.emit("scenario_command", {"action": "start"})
+    states = _scenario_states(sio, "finished")
+    final = states[-1]
+    assert final["active"] and [s["state"] for s in final["steps"]] == ["done"] * 6
+    assert "briefing" not in final                                    # raw model text never sent
+    html = final["briefing_html"]
+    assert "<strong>Fire in CorridorB.</strong>" in html
+    assert "<img" not in html and "attacker.example" not in html
+    assert aegis.twin.zone_status["CorridorB"] == "FIRE"
+
+    sio.emit("scenario_command", {"action": "reset"})
+    _scenario_states(sio, "idle")
+    assert aegis.twin.zone_status["CorridorB"] == "SAFE" and aegis.system.pending_actions() == []
+    sio.disconnect()
+
+
+def test_scenario_commands_require_login_and_ignore_unknown_actions(client):
+    sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    assert not sio.is_connected()                                       # refused before login
+    login(client)
+    sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    sio.emit("scenario_command", {"action": "rm -rf"})
+    assert aegis.scenario.status == "idle"
+    sio.disconnect()
+
+
+def test_every_page_offers_the_scenario_controls(client):
+    login(client)
+    for path in ["/", "/twin", "/chat", "/nlp"]:
+        html = client.get(path).get_data(as_text=True)
+        assert 'id="scenario-run"' in html and 'id="scenario-banner"' in html and "SCENARIO &middot; SIMULATED" in html

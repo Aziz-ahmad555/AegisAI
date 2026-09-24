@@ -16,6 +16,10 @@ REPORT_PARSED = "REPORT_PARSED"          # an emergency report was analyzed
 ACTION_PROPOSED = "ACTION_PROPOSED"      # the system suggests an action; needs operator confirmation
 ACTION_CONFIRMED = "ACTION_CONFIRMED"
 ACTION_DISMISSED = "ACTION_DISMISSED"
+RESET = "RESET"                          # system returned to baseline
+SCENARIO = "SCENARIO"                    # guided-scenario narration (start, steps, finish)
+ROUTE_STATUS = "ROUTE_STATUS"            # evacuation routes changed (e.g. a room became isolated)
+BRIEFING = "BRIEFING"                    # agents' situation briefing
 
 SEVERITIES = ("info", "warning", "critical")
 
@@ -54,6 +58,9 @@ class EventBus:
         self._subscribers = []   # (event_type or None for all, handler)
         self._timeline = deque(maxlen=history)
         self._ids = itertools.count(1)
+        # While a guided scenario runs, every event is tagged simulated so the
+        # UI can never present scripted data as real.
+        self.simulated = False
 
     def subscribe(self, handler, event_type=None):
         with self._lock:
@@ -63,6 +70,8 @@ class EventBus:
         if event.severity not in SEVERITIES:
             raise ValueError(f"unknown severity {event.severity!r}")
         with self._lock:
+            if self.simulated:
+                event.data = {**event.data, "simulated": True}
             event.id = next(self._ids)
             event.ts = event.ts or time.time()
             self._timeline.append(event)
