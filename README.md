@@ -3,6 +3,9 @@
 
 [![CI](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml/badge.svg)](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml)
 
+**Live demo: https://aegisai-9aki.onrender.com**
+*Hosted on Render's free tier - if it has been idle, the first load can take up to a minute while it wakes up. Demo login available on request. The hosted version has no camera, so Live Vision is local-only; everything else, including the guided scenario, works.*
+
 AegisAI is a command center that reasons across several signals at once, the way a real campus or smart-building control room would: camera fire/smoke detection, IoT-style sensor telemetry, free-text caller reports and a live digital twin of the building. Evidence is fused into a risk picture, the system *proposes* actions (a human confirms them), evacuation routes recompute around hazards, and a decision agent answers operator questions from live data.
 
 ![Guided scenario: sensors rise, the camera confirms smoke, a caller reports fire, the fire is confirmed, routes recompute and the agents brief the operator](docs/images/scenario.gif)

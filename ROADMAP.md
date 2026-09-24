@@ -125,9 +125,9 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 9 — Deploy & present
 
-- [x] Cloud mode finished; deploy artifacts ready (`Dockerfile`, `render.yaml`, `/healthz`), verified in a container with a real browser. *Going live needs the owner's Render account (see README).*
+- [x] Cloud mode finished; deploy artifacts ready (`Dockerfile`, `render.yaml`, `/healthz`), verified in a container with a real browser. Live at https://aegisai-9aki.onrender.com (Render free tier).
 - [x] Dockerfile (cloud mode, non-root, health check, gunicorn gthread x1).
-- [x] README overhaul: architecture diagram, screenshots + scenario GIF, real-vs-simulated table, known limitations, engineering findings, local + cloud setup with free Groq. *(Live demo link pending deployment.)*
+- [x] README overhaul: architecture diagram, screenshots + scenario GIF, real-vs-simulated table, known limitations, engineering findings, local + cloud setup with free Groq.
 - [ ] Short demo video.
 
 ---
