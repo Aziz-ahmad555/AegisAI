@@ -23,7 +23,27 @@ Tasks:
 - [ ] Only broadcast state over WebSocket when it actually changed (twin) and throttle sensor broadcasts per page.
 - [ ] Lazy-load heavy page components (3D hero on Overview) so first paint is instant.
 - [x] Cloud mode never imports the vision stack (lazy import)
-- [ ] Production server config: `gunicorn` with threaded worker (`gthread`), single worker (shared in-memory state).
+- [x] Production server config — decided and verified (see **Production server** below).
+- [x] Live Vision tracking thresholds configurable (`AEGISAI_TRACK_CONF`, `AEGISAI_INFER_SIZE`, `AEGISAI_TRACK_MODEL`); overlay no longer collides with box labels; `tools/diagnose_detections.py` for raw per-class confidence + latency.
+- [ ] Choose tracking defaults (model / size / threshold) from a real phone-in-hand diagnostic capture (blocked: every capture from this session's processes returns black frames; needs a run by the user in front of the camera).
+
+### Production server (decision, 2026-09-24)
+
+**Decision:** Flask-SocketIO in `threading` async mode, served by **gunicorn's threaded worker with exactly one worker process**:
+
+```
+gunicorn -k gthread -w 1 --threads 50 -b 0.0.0.0:$PORT app:app
+```
+
+**Why:**
+- eventlet was removed because its green threads serialize CPU-bound YOLO inference with every request (the root cause of the lag). Threading mode uses real OS threads.
+- WebSockets still work in production: `simple-websocket` has a gunicorn mode that takes over the raw socket from `environ['gunicorn.socket']`, so there's no silent fallback to long-polling.
+- **One worker is required, not a tuning choice:** the twin, sensor state, event bus and pending actions live in process memory, and gunicorn has no sticky sessions for Socket.IO. Scale with `--threads`, not `-w`. Going multi-worker would need Redis (`message_queue=`) plus moving state out of process — out of scope for now.
+- Every open page holds one thread (WebSocket), plus one per Live Vision MJPEG viewer; 50 threads covers a demo comfortably.
+- Local dev keeps `python app.py` (Werkzeug + `allow_unsafe_werkzeug=True`, which is fine on 127.0.0.1). gunicorn does not run natively on Windows.
+
+**Verified** in a `python:3.11-slim` container with `requirements-cloud.txt` and `AEGISAI_CLOUD_MODE=true`: all pages 3–12 ms, Socket.IO upgraded to a real `websocket` transport, live pushes delivered, torch/ultralytics not installed.
+That check also exposed that **unauthenticated sockets stayed connected** under a real server (calling `disconnect()` inside the connect handler doesn't reject the handshake) — fixed by raising `ConnectionRefusedError`.
 
 ## Stage 1 — Repository hygiene
 
@@ -36,13 +56,13 @@ Tasks:
 
 ## Stage 2 — Make it one connected system (biggest credibility gain)
 
-- [ ] **Shared core package** `aegis_core/` — single source of truth for fusion, anomaly, trend, NLP, routing, twin; remove the copy-pasted modules across phase folders and `command_center/`.
-- [ ] **Event bus** — in-process pub/sub; every module publishes typed events (`FireDetected`, `SensorAnomaly`, `ReportParsed`, `ZoneCleared`…).
-- [ ] **Live agents** — Fire/Medical/Route agents read the real digital twin + sensor state instead of hard-coded demo data.
-- [ ] **Camera → fusion** — fire/smoke confidence from Live Vision feeds the fused risk score (currently always 0).
-- [ ] **Sensors → twin** — sensors are mapped to zones; HIGH/CRITICAL fused risk raises that zone's risk on the twin.
-- [ ] **Reports → twin** — a parsed report ("fire in CorridorA, 3 trapped") updates the twin and Medical agent automatically (with operator confirmation).
-- [ ] **Incident timeline** — one unified, time-ordered log of every event with source, confidence, and resulting action.
+- [ ] *(awaiting decision — deletes phase-folder copies)* **Shared core package** `aegis_core/` — single source of truth for fusion, anomaly, trend, NLP, routing, twin; remove the copy-pasted modules across phase folders and `command_center/`.
+- [x] **Event bus** — `events.py`: in-process pub/sub with typed events; failing subscribers are isolated.
+- [x] **Live agents** — Fire/Medical/Route agents read the live twin, sensor, camera and report state; unknowns are reported as unknown (e.g. medical unit availability), report data is labelled unverified.
+- [x] **Camera → fusion** — fire/smoke confidence from Live Vision (fire/smoke mode) feeds the fused risk score; detections with hysteresis raise a timeline event and a *proposed* fire declaration for `AEGISAI_CAMERA_ZONE`.
+- [x] **Sensors → twin** — fused sensor risk is mirrored onto `AEGISAI_SENSOR_ZONE` (amber on the map, doesn't block routes); level changes and anomalies go to the timeline; CRITICAL proposes a fire declaration.
+- [x] **Reports → twin** — reports are matched to twin zones; fire reports create a proposed action the operator confirms or dismisses (tray on every page); people counts feed the Medical agent.
+- [x] **Incident timeline** — unified, time-ordered, pushed live over the WebSocket; on the Digital Twin page, with toasts for warnings/critical events on every page.
 - [ ] **Room-level people tracking** — trapped-people counts per zone feed the Medical agent and routing priority.
 
 ## Stage 3 — Tests & CI
