@@ -1,4 +1,4 @@
-﻿# AegisAI
+# AegisAI
 ### Autonomous Multimodal Emergency Intelligence & Disaster Response Platform
 
 A real-time AI system for emergency detection, risk prediction, and disaster response - built in phases, starting from core computer vision and scaling toward a full multimodal intelligence platform (sensor fusion, predictive risk modeling, route optimization, and LLM-assisted decision support).
@@ -16,12 +16,22 @@ cd command_center
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e ..
 python app.py
 ```
 
 Open http://127.0.0.1:5000 and log in (default operator / aegisai2026, configurable via AEGISAI_USERNAME / AEGISAI_PASSWORD). Requires the trained models copied in as fire_smoke_model.pt and an ANTHROPIC_API_KEY for full LLM-based chat routing (falls back to keyword-based routing otherwise). All environment variables are documented in `command_center/.env.example`.
 
-For a hosted deployment without a camera, install `requirements-cloud.txt` instead (no torch/ultralytics/opencv) and set `AEGISAI_CLOUD_MODE=true`.
+`pip install -e ..` installs the shared `aegis_core` package (the domain logic the app runs on) in editable mode.
+
+For a hosted deployment without a camera, install `requirements-cloud.txt` instead (no torch/ultralytics/opencv), set `AEGISAI_CLOUD_MODE=true`, and serve with gunicorn from the repo root:
+
+```
+pip install -r command_center/requirements-cloud.txt && pip install .
+gunicorn -k gthread -w 1 --threads 50 --chdir command_center -b 0.0.0.0:$PORT app:app
+```
+
+Run the tests from the repo root with `python -m pytest`.
 
 See [ROADMAP.md](ROADMAP.md) for the ongoing polish and upgrade plan.
 
@@ -76,9 +86,9 @@ The sections below document the individual phases as they were originally built 
 
 ---
 
-## How to run this project
+## How to run the individual phases (archived)
 
-Each phase is self-contained with its own virtual environment.
+The per-phase folders are historical snapshots, now under `archive/phases/` (see its README). Each is self-contained with its own virtual environment; paths below are relative to `archive/phases/`. The live code is `aegis_core/` + `command_center/`.
 
 ### Phase 1 - Vision pipeline (phase1_vision/)
 pip install ultralytics opencv-python
@@ -134,7 +144,7 @@ Requires an Anthropic API key for full LLM-based routing; falls back to keyword-
 pip install anthropic
 python agents.py
 python coordinator.py
-See MLOPS.md in this folder for MLOps practices documentation.
+See `archive/phases/phase11_multiagent_mlops_security/MLOPS.md` for MLOps practices documentation.
 
 ---
 
@@ -157,16 +167,21 @@ Trained model weights (.pt files) are intentionally excluded from this repositor
 ## Project structure
 
 AegisAI/
-  phase1_vision/          # Detection, tracking, crowd counting, fall detection
-  phase3_fire_smoke/      # Custom fire/smoke model training pipeline
-  phase4_sensor_fusion/   # Sensor simulation + multimodal risk fusion engine
-  phase5_prediction/      # Anomaly detection, trend prediction, full live monitor
-  phase6_route_optimization/  # Graph-based evacuation routing, integrated with fire detection
-  phase7_drone_intelligence/  # Aerial search-and-rescue pose detection (SARD dataset)
-  phase8_nlp_reports/     # Hybrid NLP pipeline for emergency report/call analysis
-  phase9_llm_command_center/  # Claude-powered Q&A over live system state, with offline fallback
-  phase10_digital_twin/   # Live web dashboard - interactive building visualization with real-time routing
-  phase11_multiagent_mlops_security/  # Multi-agent coordinator, MLOps documentation, and dashboard security hardening
+  aegis_core/             # Shared domain logic: digital twin + routing, sensor fusion, anomaly/trend
+                          #   detection, emergency NLP, event bus + incident timeline, agents, vision pipeline
+  command_center/         # Flask + Socket.IO web app (templates, static, tests, tools, model weights)
+  archive/phases/         # Historical per-phase snapshots (not maintained)
+    phase1_vision/          # Detection, tracking, crowd counting, fall detection
+    phase3_fire_smoke/      # Custom fire/smoke model training pipeline
+    phase4_sensor_fusion/   # Sensor simulation + multimodal risk fusion engine
+    phase5_prediction/      # Anomaly detection, trend prediction, full live monitor
+    phase6_route_optimization/  # Graph-based evacuation routing, integrated with fire detection
+    phase7_drone_intelligence/  # Aerial search-and-rescue pose detection (SARD dataset)
+    phase8_nlp_reports/     # Hybrid NLP pipeline for emergency report/call analysis
+    phase9_llm_command_center/  # Claude-powered Q&A over live system state, with offline fallback
+    phase10_digital_twin/   # Live web dashboard - interactive building visualization with real-time routing
+    phase11_multiagent_mlops_security/  # Multi-agent coordinator, MLOps documentation, and dashboard security hardening
+  ROADMAP.md              # Ongoing polish and upgrade plan
 
 ---
 

@@ -33,7 +33,8 @@ Tasks:
 **Decision:** Flask-SocketIO in `threading` async mode, served by **gunicorn's threaded worker with exactly one worker process**:
 
 ```
-gunicorn -k gthread -w 1 --threads 50 -b 0.0.0.0:$PORT app:app
+pip install -r command_center/requirements-cloud.txt && pip install .
+gunicorn -k gthread -w 1 --threads 50 --chdir command_center -b 0.0.0.0:$PORT app:app
 ```
 
 **Why:**
@@ -57,7 +58,7 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 2 — Make it one connected system (biggest credibility gain)
 
-- [ ] *(awaiting decision — deletes phase-folder copies)* **Shared core package** `aegis_core/` — single source of truth for fusion, anomaly, trend, NLP, routing, twin; remove the copy-pasted modules across phase folders and `command_center/`.
+- [x] **Shared core package** `aegis_core/` — single source of truth for fusion, anomaly, trend, NLP, routing, twin, agents, events and vision; installable via the root `pyproject.toml`. Phase folders were moved (not deleted) to `archive/phases/` as historical snapshots.
 - [x] **Event bus** — `events.py`: in-process pub/sub with typed events; failing subscribers are isolated.
 - [x] **Live agents** — Fire/Medical/Route agents read the live twin, sensor, camera and report state; unknowns are reported as unknown (e.g. medical unit availability), report data is labelled unverified.
 - [x] **Camera → fusion** — fire/smoke confidence from Live Vision (fire/smoke mode) feeds the fused risk score; detections with hysteresis raise a timeline event and a *proposed* fire declaration for `AEGISAI_CAMERA_ZONE`.

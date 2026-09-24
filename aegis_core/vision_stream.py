@@ -37,6 +37,13 @@ TRACK_CONF = _env_float("AEGISAI_TRACK_CONF", 0.25)
 INFER_SIZE = _env_int("AEGISAI_INFER_SIZE", 320)
 # COCO-trained general model used for tracking (yolov8n.pt / yolov8s.pt ...).
 TRACK_MODEL = os.environ.get("AEGISAI_TRACK_MODEL", "yolov8n.pt")
+# Where model weights live. Defaults to the working directory, which for the
+# app is command_center/ (python app.py / gunicorn --chdir command_center).
+MODEL_DIR = os.environ.get("AEGISAI_MODEL_DIR", ".")
+
+
+def model_path(name):
+    return name if os.path.isabs(name) else os.path.join(MODEL_DIR, name)
 
 
 def _write_tracker_config(conf):
@@ -59,7 +66,7 @@ def _write_tracker_config(conf):
 
 def open_camera(index=0):
     """
-    The one place the webcam is opened - the app and tools/diagnose_detections.py
+    The one place the webcam is opened - the app and command_center/tools/diagnose_detections.py
     both use this, so a diagnostic capture always matches what the app sees.
     """
     # CAP_DSHOW is the more reliable backend for webcams on Windows;
@@ -115,9 +122,9 @@ class VisionStream:
     IDLE_FPS = 4
 
     def __init__(self):
-        self.general_model = YOLO(TRACK_MODEL)
+        self.general_model = YOLO(model_path(TRACK_MODEL))
         self.tracker_config = _write_tracker_config(TRACK_CONF)
-        self.fire_model = YOLO("fire_smoke_model.pt")
+        self.fire_model = YOLO(model_path("fire_smoke_model.pt"))
         self.pose_model = None
 
         self.lock = threading.RLock()
@@ -193,7 +200,7 @@ class VisionStream:
         # Load the pose model outside the lock - it takes a moment, and
         # holding the lock would freeze the stream while it loads.
         if mode == "fall_detection" and self.pose_model is None:
-            pose_model = YOLO("yolov8n-pose.pt")
+            pose_model = YOLO(model_path("yolov8n-pose.pt"))
             with self.lock:
                 if self.pose_model is None:
                     self.pose_model = pose_model

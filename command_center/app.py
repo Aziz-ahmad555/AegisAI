@@ -4,11 +4,11 @@ import time
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response
 from flask_socketio import SocketIO, disconnect, emit
-from building_state import BuildingDigitalTwin
-from emergency_nlp import parse_emergency_report
-from coordinator import ask_coordinator, get_client, init_agents
-from sensor_state import SensorFusionState
-from system import AegisSystem
+from aegis_core.building_state import BuildingDigitalTwin
+from aegis_core.emergency_nlp import parse_emergency_report
+from aegis_core.coordinator import ask_coordinator, get_client, init_agents
+from aegis_core.sensor_state import SensorFusionState
+from aegis_core.system import AegisSystem
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
@@ -36,7 +36,7 @@ if CLOUD_MODE:
     vision = None
 else:
     # Imported lazily so hosted deployments never pull in torch/ultralytics.
-    from vision_stream import VisionStream
+    from aegis_core.vision_stream import VisionStream
     vision = VisionStream()
 
 # One object wiring the modules together (camera -> fusion -> twin, reports

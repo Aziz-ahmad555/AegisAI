@@ -4,8 +4,8 @@ import re
 import threading
 import time
 
-import events as ev
-from events import Event, EventBus
+from . import events as ev
+from .events import Event, EventBus
 
 # Which twin zone the (simulated) sensor cluster and the camera watch.
 # Real deployments would map many sensors/cameras to many zones; this demo

@@ -34,8 +34,7 @@ WATCH = {"cell phone", "person", "remote", "book", "laptop"}
 def capture(seconds, every):
     # Open the camera through the app's own function so this capture uses
     # the exact same index, backend and resolution as Live Vision.
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from vision_stream import open_camera
+    from aegis_core.vision_stream import open_camera
 
     cap = open_camera()
     if not cap.isOpened():

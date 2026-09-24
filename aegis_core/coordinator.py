@@ -1,7 +1,7 @@
 import os
 import json
 import anthropic
-from agents import FireAgent, MedicalAgent, RouteAgent
+from .agents import FireAgent, MedicalAgent, RouteAgent
 
 MODEL = "claude-sonnet-4-5"
 
@@ -138,9 +138,9 @@ def ask_coordinator(question, client):
 
 
 if __name__ == "__main__":
-    from building_state import BuildingDigitalTwin
-    from sensor_state import SensorFusionState
-    from system import AegisSystem
+    from .building_state import BuildingDigitalTwin
+    from .sensor_state import SensorFusionState
+    from .system import AegisSystem
 
     init_agents(AegisSystem(BuildingDigitalTwin(), SensorFusionState()))
     print("AegisAI Multi-Agent Command Coordinator (standalone: fresh, empty system state)")

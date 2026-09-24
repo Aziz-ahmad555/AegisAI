@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-core"
+version = "0.2.0"
+description = "AegisAI core: digital twin, sensor fusion, emergency NLP, agents and vision pipeline behind the Command Center"
+requires-python = ">=3.11"
+# Runtime dependencies are pinned in command_center/requirements*.txt; the
+# package itself is installed editable into that environment (pip install -e .).
+dependencies = []
+
+[tool.setuptools]
+packages = ["aegis_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["command_center/tests"]

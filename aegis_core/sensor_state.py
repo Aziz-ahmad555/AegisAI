@@ -1,10 +1,10 @@
 import threading
 import time
 from collections import deque
-from sensor_simulator import SensorSimulator
-from fusion_engine import compute_risk_score, classify_risk
-from anomaly_detector import AnomalyDetector
-from trend_predictor import TrendPredictor
+from .sensor_simulator import SensorSimulator
+from .fusion_engine import compute_risk_score, classify_risk
+from .anomaly_detector import AnomalyDetector
+from .trend_predictor import TrendPredictor
 
 
 class SensorFusionState:

@@ -1,13 +1,13 @@
 """Stage 2 integration: modules connected through AegisSystem + EventBus."""
 import pytest
 
-import events as ev
-from agents import FireAgent, MedicalAgent, RouteAgent
-from building_state import BuildingDigitalTwin
-from emergency_nlp import parse_emergency_report
-from events import Event, EventBus
-from sensor_state import SensorFusionState
-from system import CAMERA_ZONE, SENSOR_ZONE, AegisSystem
+from aegis_core import events as ev
+from aegis_core.agents import FireAgent, MedicalAgent, RouteAgent
+from aegis_core.building_state import BuildingDigitalTwin
+from aegis_core.emergency_nlp import parse_emergency_report
+from aegis_core.events import Event, EventBus
+from aegis_core.sensor_state import SensorFusionState
+from aegis_core.system import CAMERA_ZONE, SENSOR_ZONE, AegisSystem
 
 
 class FakeVision:
