@@ -271,3 +271,8 @@ def test_every_page_offers_the_scenario_controls(client):
     for path in ["/", "/twin", "/chat", "/nlp"]:
         html = client.get(path).get_data(as_text=True)
         assert 'id="scenario-run"' in html and 'id="scenario-banner"' in html and "SCENARIO &middot; SIMULATED" in html
+
+
+def test_healthz_is_public_and_minimal(client):
+    r = client.get("/healthz")
+    assert r.status_code == 200 and r.get_json() == {"status": "ok", "zones": 10}

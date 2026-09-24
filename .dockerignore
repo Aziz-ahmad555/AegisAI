@@ -1,0 +1,14 @@
+.git
+.github
+.claude
+**/venv
+**/.venv
+**/__pycache__
+**/*.pyc
+*.egg-info
+archive
+command_center/diagnostics
+command_center/tests
+command_center/tools
+**/*.pt
+.env

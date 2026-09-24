@@ -162,6 +162,13 @@ def login():
     return render_template("login.html", error=error), status
 
 
+@app.route("/healthz")
+def healthz():
+    # Unauthenticated liveness probe for hosting platforms. Reveals nothing
+    # beyond "the process is up and the core loop answers".
+    return jsonify({"status": "ok", "zones": len(system.zones())})
+
+
 @app.route("/logout")
 def logout():
     session.clear()

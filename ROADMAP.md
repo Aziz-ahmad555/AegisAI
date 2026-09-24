@@ -111,9 +111,9 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 7 — Demo experience
 
-- [ ] **Guided scenario mode** — one button plays a scripted incident end-to-end (sensors rise → camera confirms → zone ignites → reroute → agents brief the operator) with a narrated timeline.
-- [ ] Scenario library: kitchen fire, blocked stairwell, medical emergency, multi-zone fire.
-- [ ] Reset-to-baseline button.
+- [x] **Guided scenario mode** — 'Run demo scenario' plays a scripted incident through the real modules (sensor ramp → simulated camera → caller report → proposal with visible countdown/auto-confirm → twin + rerouting → agents' briefing); always labelled SCENARIO / SIMULATED; Pause/Resume, Stop, Reset; works in offline LLM mode.
+- [ ] Scenario library: kitchen fire, blocked stairwell, medical emergency, multi-zone fire. *(one scenario so far)*
+- [x] Reset-to-baseline (fires, proposals, reports, sensors and camera back to normal).
 - [ ] Incident report export (PDF/Markdown) summarizing a scenario.
 
 ## Stage 8 — Models (optional, longer)
@@ -125,9 +125,9 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 9 — Deploy & present
 
-- [ ] Finish cloud mode (vision disabled, lightweight requirements) and deploy (Render / Railway / Fly.io).
-- [ ] Dockerfile + one-command local run.
-- [ ] README overhaul: live demo link, architecture diagram, screenshots/GIF, "real vs. simulated" table, known limitations, engineering findings.
+- [x] Cloud mode finished; deploy artifacts ready (`Dockerfile`, `render.yaml`, `/healthz`), verified in a container with a real browser. *Going live needs the owner's Render account (see README).*
+- [x] Dockerfile (cloud mode, non-root, health check, gunicorn gthread x1).
+- [x] README overhaul: architecture diagram, screenshots + scenario GIF, real-vs-simulated table, known limitations, engineering findings, local + cloud setup with free Groq. *(Live demo link pending deployment.)*
 - [ ] Short demo video.
 
 ---

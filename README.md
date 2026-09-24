@@ -1,20 +1,104 @@
 # AegisAI
-### Autonomous Multimodal Emergency Intelligence & Disaster Response Platform
+### Multimodal emergency intelligence for buildings - detection, fusion, evacuation routing and an agent-driven command chat
 
 [![CI](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml/badge.svg)](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml)
 
-A real-time AI system for emergency detection, risk prediction, and disaster response - built in phases, starting from core computer vision and scaling toward a full multimodal intelligence platform (sensor fusion, predictive risk modeling, route optimization, and LLM-assisted decision support).
+AegisAI is a command center that reasons across several signals at once, the way a real campus or smart-building control room would: camera fire/smoke detection, IoT-style sensor telemetry, free-text caller reports and a live digital twin of the building. Evidence is fused into a risk picture, the system *proposes* actions (a human confirms them), evacuation routes recompute around hazards, and a decision agent answers operator questions from live data.
 
-Inspired by how real-world smart-city and campus command centers monitor and respond to emergencies - not just detecting one event type, but reasoning across multiple data sources in real time.
+![Guided scenario: sensors rise, the camera confirms smoke, a caller reports fire, the fire is confirmed, routes recompute and the agents brief the operator](docs/images/scenario.gif)
+
+*The guided demo scenario (every step is labelled SIMULATED). Recorded in offline mode - no LLM key needed.*
 
 ---
 
-## Command Center - Start Here
+## Contents
 
-The fastest way to explore this project is the unified Command Center: a single authenticated web app bringing together all 11 phases into one interface - live vision, sensor fusion, digital twin routing, aerial search, report analysis, and an LLM-coordinated multi-agent chat.
+- [What it does](#what-it-does)
+- [Architecture](#architecture)
+- [What's real and what's simulated](#whats-real-and-whats-simulated)
+- [Run it locally](#run-it-locally)
+- [Deploy it (free)](#deploy-it-free)
+- [Configuration](#configuration)
+- [Security](#security)
+- [Testing and CI](#testing-and-ci)
+- [Known limitations](#known-limitations)
+- [Engineering findings](#engineering-findings)
+- [Project structure](#project-structure)
 
+---
+
+## What it does
+
+| | |
+|---|---|
+| **Operating picture** - one threat level for the building (always on screen), active incidents first, and a live incident timeline across every module. | ![Overview during an incident](docs/images/overview-scenario.png) |
+| **Digital twin** - the building as a graph; declared fires block connections and Dijkstra routing recomputes an exit for every room, flagging rooms that must leave through their own hazard zone and rooms that are fully isolated. | ![Digital twin with a fire and an isolated room](docs/images/twin-fire.png) |
+| **Command chat** - a decision agent (Groq or Claude, with an offline fallback) consults Fire, Medical and Route agents that read live state, and answers with what the data shows - unknowns stay unknown, caller text is treated as untrusted. | ![Command chat with an agent briefing](docs/images/chat-briefing.png) |
+| **Sensor fusion** - temperature, smoke and gas readings fused with camera confidence into one 0-100 risk score, with z-score anomaly detection and trend forecasting. Sensors alone top out at HIGH; CRITICAL needs the camera to agree. | ![Sensor fusion page](docs/images/sensors.png) |
+| **Report analyzer** - spaCy entities plus domain rules extract event type, severity (incl. downplayed language), people counts and locations; a fire report that names a zone proposes a fire declaration. | ![Report analyzer](docs/images/report-analyzer.png) |
+
+Also: **Live Vision** (local only - YOLOv8 tracking, the custom fire/smoke model and pose-based fall detection on a webcam, ~120 ms camera-to-screen) and **Aerial Search** (pose classification on search-and-rescue drone imagery).
+
+**Human in the loop.** Automated evidence - a camera detection, CRITICAL sensors, a caller's report - only ever *proposes* "declare fire?". An operator confirms or dismisses it; the guided scenario auto-confirms after a visible countdown, and says so.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Inputs
+        CAM["Camera<br/>YOLOv8: tracking, fire/smoke, pose"]
+        SEN["Sensors<br/>temp / smoke / gas (simulated)"]
+        REP["Caller reports<br/>spaCy + rules"]
+    end
+
+    CAM -->|fire/smoke confidence| FUS["Sensor fusion<br/>risk score, anomaly, trend"]
+    SEN --> FUS
+    FUS --> SYS
+    CAM -.->|detection| SYS
+    REP --> SYS
+
+    SYS["AegisSystem<br/>event bus + incident timeline<br/>proposed actions"] -->|"operator confirms"| TWIN["Digital twin<br/>zones, fires, Dijkstra routes"]
+
+    TWIN --> AGENTS["Fire / Medical / Route agents<br/>(read live state)"]
+    SYS --> AGENTS
+    AGENTS --> COORD["Decision agent<br/>Groq | Claude | offline routing"]
+
+    SYS -->|Socket.IO| UI["Command Center UI<br/>Flask, server-sanitized Markdown"]
+    TWIN -->|Socket.IO| UI
+    COORD -->|streamed answer| UI
 ```
-cd command_center
+
+- **`aegis_core/`** - the domain logic as an installable package: twin and routing, sensor simulation and fusion, anomaly and trend detection, emergency NLP, the event bus that ties modules together, the agents and LLM coordinator, the vision pipeline and the guided scenario.
+- **`command_center/`** - the Flask + Socket.IO web app on top of it: auth, CSRF, rate limiting, the pages, and the tests.
+- One process holds the live state in memory, so it runs as **one** gunicorn worker (threaded) - see [ROADMAP.md](ROADMAP.md#production-server-decision-2026-09-24).
+
+---
+
+## What's real and what's simulated
+
+| Part | Status | Detail |
+|---|---|---|
+| Fire/smoke detection | **Real model** | Custom YOLOv8n, mAP50 0.576, trained on a public dataset (CPU). Runs on a live webcam locally. |
+| Object tracking, fall detection | **Real models** | YOLOv8n / YOLOv8n-pose on the live webcam (local only). |
+| Aerial pose detection | **Real model, static images** | Custom YOLOv8n on SARD (mAP50 0.572, recall 0.512). No drone - held-out test photos. |
+| Report parsing | **Real** | spaCy NER + rule engine on whatever text you type. |
+| Evacuation routing | **Real algorithm, modelled building** | Dijkstra over a 10-zone graph of a fictional building. |
+| Sensor telemetry | **Simulated** | A simulator with realistic ramping; the fusion, anomaly and trend logic on top of it is real. |
+| Chat answers | **Real LLM** (Groq / Claude) or **offline** | Agents read live system state; offline mode is keyword routing over the same agents. |
+| Guided scenario | **Scripted inputs, real pipeline** | Sensor ramp, camera confidence and the caller report are scripted; everything downstream is the normal code path. Always labelled **SCENARIO / SIMULATED**. |
+| Hosted demo | **No camera** | Cloud mode hides Live Vision; everything else works. |
+
+---
+
+## Run it locally
+
+Windows / PowerShell shown; macOS/Linux use `source venv/bin/activate`.
+
+```powershell
+git clone https://github.com/Aziz-ahmad555/AegisAI.git
+cd AegisAI\command_center
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
@@ -22,213 +106,131 @@ pip install -e ..
 python app.py
 ```
 
-Open http://127.0.0.1:5000 and log in with **operator / aegisai2026** (the local demo default; nothing to configure). Requires the trained models copied in as fire_smoke_model.pt and an ANTHROPIC_API_KEY for full LLM-based chat routing (falls back to keyword-based routing otherwise). All environment variables are documented in `command_center/.env.example`.
+Open http://127.0.0.1:5000 and sign in with **operator / aegisai2026** (local demo default). Then press **Run demo scenario** in the sidebar.
 
-`pip install -e ..` installs the shared `aegis_core` package (the domain logic the app runs on) in editable mode.
+Live Vision needs the trained fire/smoke weights copied into `command_center/` as `fire_smoke_model.pt` (weights aren't committed - see [Model weights](#model-weights)); the other pages work without them.
 
-### Command Chat LLM (Groq or Claude)
+### Free LLM for the command chat (Groq)
 
-Command Chat's decision agent runs on **Groq** or **Claude**, falling back to offline keyword routing when neither is configured. Set a key before starting the app, e.g. `$env:GROQ_API_KEY = '...'` (PowerShell); `AEGISAI_LLM_PROVIDER=groq|claude|offline` forces a choice. The console prints the active provider at startup (e.g. `LLM: groq / openai/gpt-oss-120b (auto-selected: available to this key)`) - for Groq it checks which models your key can use and picks a supported one - and the chat page badge shows it too.
+1. Create a free key at https://console.groq.com/keys.
+2. Set it in the terminal you start the app from - in **single quotes**, and never paste it anywhere else:
+   ```powershell
+   $env:GROQ_API_KEY = 'gsk_...'
+   ```
+3. Start the app. The first line tells you which LLM is active, e.g. `LLM: groq / openai/gpt-oss-120b (auto-selected: available to this key)`; if the key is rejected it says so and the chat runs offline. The app picks a tool-capable Groq model your key can actually use.
 
-### Using your own password
+Without a key the chat still works in **offline mode** (keyword routing over the same agents). Claude is also supported: set `ANTHROPIC_API_KEY` (default model `claude-sonnet-5`), or force a provider with `AEGISAI_LLM_PROVIDER=groq|claude|offline`.
 
-Only a hash of the password is stored. Generate it (you're prompted; nothing is echoed or kept in shell history):
+### Your own password
 
-```
+Only a hash is stored. Generate it (you're prompted; nothing is echoed):
+```powershell
 python -c "import getpass; from werkzeug.security import generate_password_hash as h; print(h(getpass.getpass()))"
 ```
+and set the output, in single quotes because it contains `$`: `$env:AEGISAI_PASSWORD_HASH = 'scrypt:...'`.
 
-Set the output as `AEGISAI_PASSWORD_HASH`, in **single quotes** because the hash contains `$`:
+---
 
+## Deploy it (free)
+
+The repo ships a `Dockerfile` (cloud mode: no camera stack, gunicorn threaded worker, non-root user, health check) and a Render blueprint (`render.yaml`).
+
+**Render (free web service):**
+1. Push the repo to GitHub, then in Render: **New + → Blueprint** → pick the repo.
+2. Render generates `AEGISAI_SECRET_KEY`. Fill in `AEGISAI_PASSWORD_HASH` (command above) and, optionally, `GROQ_API_KEY`.
+3. Deploy. The free tier sleeps when idle; the first request after a sleep takes a while.
+
+**Any Docker host:**
+```bash
+docker build -t aegisai .
+docker run -p 8000:8000 -e AEGISAI_SECRET_KEY=<64 hex chars> -e AEGISAI_PASSWORD_HASH='<hash>' -e GROQ_API_KEY='<optional>' aegisai
 ```
-$env:AEGISAI_PASSWORD_HASH = 'scrypt:32768:8:1$...'      # PowerShell
-export AEGISAI_PASSWORD_HASH='scrypt:32768:8:1$...'      # bash
+
+Cloud mode **refuses to start** without a real `AEGISAI_SECRET_KEY` (32+ characters; `python -c "import secrets; print(secrets.token_hex(32))"`) and an `AEGISAI_PASSWORD_HASH`, and names what's missing.
+
+---
+
+## Configuration
+
+All settings are environment variables; `command_center/.env.example` documents each one.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AEGISAI_PASSWORD_HASH` / `AEGISAI_USERNAME` | demo login | Operator credentials (hash required in cloud mode) |
+| `AEGISAI_SECRET_KEY` | demo key | Session signing (required in cloud mode) |
+| `AEGISAI_CLOUD_MODE` | `false` | Hosted mode: no camera, secure cookies, strict startup checks |
+| `AEGISAI_TRUST_PROXY` | `false` | Use the real client IP behind a hosting proxy (rate limiting) |
+| `GROQ_API_KEY` / `ANTHROPIC_API_KEY` | - | Chat LLM keys |
+| `AEGISAI_LLM_PROVIDER` | auto | `groq`, `claude` or `offline` |
+| `AEGISAI_GROQ_MODEL` / `AEGISAI_CLAUDE_MODEL` | auto / `claude-sonnet-5` | Pin a model |
+| `AEGISAI_SENSOR_ZONE` / `AEGISAI_CAMERA_ZONE` | `CorridorB` / `Room201` | Zones the sensors and camera watch |
+| `AEGISAI_SCENARIO_COUNTDOWN` | `10` | Seconds before the scenario auto-confirms |
+| `AEGISAI_TRACK_CONF` / `AEGISAI_INFER_SIZE` / `AEGISAI_TRACK_MODEL` | `0.25` / `320` / `yolov8n.pt` | Live Vision tuning (chosen from a measured phone-detection test) |
+
+---
+
+## Security
+
+- Hashed operator password, constant-time checks, session reset on login, login rate limiting (5 failures / 5 min per client).
+- CSRF tokens on every POST; Socket.IO accepts same-origin connections only and refuses unauthenticated handshakes.
+- A Content-Security-Policy with **no third-party origins** - every script, stylesheet and font is self-hosted.
+- LLM output is untrusted: Markdown is rendered **server-side** with raw HTML disabled, then sanitized with an allowlist (no scripts, handlers, styles or images; safe links only). Tested against 19 XSS payloads and in a real browser.
+- Caller text reaches the LLM only in fields marked `_untrusted`, and the prompt forbids following instructions inside them.
+- Keys are never logged; anything key-shaped is redacted from error messages and tracebacks.
+
+---
+
+## Testing and CI
+
+```powershell
+pip install -r command_center/requirements-dev.txt
+python -m pytest          # from the repo root - 255 tests
+ruff check aegis_core command_center
 ```
 
-Then log in as `operator` (or `AEGISAI_USERNAME`) with your password. Five failed logins from one address lock that address out for up to 5 minutes.
-
-### Hosted deployment (cloud mode)
-
-For a hosted deployment without a camera, install `requirements-cloud.txt` instead (no torch/ultralytics/opencv), set `AEGISAI_CLOUD_MODE=true`, and serve with gunicorn from the repo root. Cloud mode **refuses to start** unless `AEGISAI_SECRET_KEY` (32+ chars: `python -c "import secrets; print(secrets.token_hex(32))"`) and `AEGISAI_PASSWORD_HASH` are set, and it tells you which is missing. Set `AEGISAI_TRUST_PROXY=true` behind a hosting proxy.
-
-```
-pip install -r command_center/requirements-cloud.txt && pip install .
-gunicorn -k gthread -w 1 --threads 50 --chdir command_center -b 0.0.0.0:$PORT app:app
-```
-
-Development: `pip install -r command_center/requirements-dev.txt`, then from the repo root run `python -m pytest` (171 tests) and `ruff check aegis_core command_center`. `pre-commit install` runs ruff on every commit. CI runs both on every push.
-
-See [ROADMAP.md](ROADMAP.md) for the ongoing polish and upgrade plan.
-
-The sections below document the individual phases as they were originally built and tested - useful for understanding the development history and running any component in isolation.
-
+GitHub Actions runs ruff and the full suite on every push, using the cloud requirement set (no camera or GPU stack). The tests use fake LLM clients - no network, no keys.
 
 ---
 
-## Current status: Phase 11 of 11 - COMPLETE
+## Known limitations
 
-- [x] **Phase 1 - Real-time vision pipeline**
-  Live object detection (YOLOv8n) and multi-object tracking on webcam feed, running in real time on CPU.
-
-- [x] **Phase 2 - Crowd analytics and fall detection**
-  Person-only detection with live crowd counting, and pose-based fall detection using keypoint confidence filtering to avoid false positives from partial-body visibility.
-- [x] **Phase 3 - Fire/smoke detection**
-  Custom-trained YOLOv8n model (30 epochs, CPU-only) on a public fire/smoke dataset. mAP50: 0.576 (Fire: 0.578, Smoke: 0.575). Documented limitation: reduced reliability in low-light conditions due to limited nighttime training data.
-
-- [x] **Phase 4 - IoT sensor fusion**
-  Simulated temperature/smoke/gas sensor stream combined with live camera fire/smoke detection into a single fused risk score (NORMAL / ELEVATED / HIGH / CRITICAL). Demonstrates multimodal reasoning: a single signal raises moderate concern, but agreement between both modalities produces a much higher, more confident risk assessment.
-
-- [x] **Phase 5 - Predictive risk and anomaly detection**
-  Rolling statistical anomaly detector (z-score based) flags unusual sensor readings relative to recent history. Linear trend predictor classifies risk trajectory (STABLE/RISING/RISING_FAST/FALLING) and forecasts the next value. Combined into a full live monitor alongside camera detection and sensor fusion. Sensor simulator rewritten with gradual value ramping and cooldown periods to model realistic physical behavior instead of instant jumps.
-- [x] **Phase 6 - Route optimization for evacuation**
-  Graph-based building model (rooms, corridors, exits) with Dijkstra shortest-path evacuation routing via NetworkX. Validated dynamic rerouting when paths are blocked, including correct detection of fully isolated/unreachable rooms. Integrated with Phase 3's fire detection model: camera-detected fire in a monitored zone automatically blocks the corresponding graph edges and triggers live rerouting - demonstrating a working end-to-end pipeline from computer vision to decision-making.
-- [x] **Phase 7 - Drone-based aerial intelligence**
-  Custom-trained YOLOv8n model (30 epochs, CPU-only) on the SARD (Search and Rescue Drone) dataset - 1,980 aerial images of people in distress-relevant poses (Running, Walking, laying_down, seated, stands). mAP50: 0.572, Precision: 0.784, Recall: 0.512. Tested on static aerial test images rather than live drone footage, since no physical drone hardware was available - a deliberate, honestly-scoped simulation of aerial search-and-rescue analysis. Distinguishing laying_down/seated poses from active movement directly supports identifying potentially injured or stranded individuals in disaster imagery.
-- [x] **Phase 8 - NLP for emergency reports/calls**
-  Hybrid NLP pipeline combining spaCy's pretrained entity recognition with custom rule-based classification for emergency-specific concepts spaCy doesn't natively understand: event type (fire vs. possible-fire-smell distinction, medical, structural, trapped), severity assessment (including detection of reporter-downplayed language), people counts, and common indoor location vocabulary (kitchen, cafeteria, laboratory, etc.) that general-purpose NER misses. Interactive CLI analyzer included. Iteratively debugged real issues: an operator-precedence bug in number parsing, keyword collisions between event categories, and substring double-matching in location extraction.
-- [x] **Phase 9 - LLM-assisted command center**
-  Claude (Anthropic API) wired with tool-use/function-calling to answer natural-language questions about live system state (active incidents, risk score, evacuation status, parsed reports) grounded in real data rather than hallucination. Includes a rule-based offline fallback that activates automatically on API errors (insufficient credits, no connection, missing key) so the tool degrades gracefully instead of crashing - a deliberate resilience pattern for a system with an external paid dependency.
-- [x] **Phase 10 - Digital twin and scenario simulation**
-  Live web dashboard (Flask + Flask-SocketIO) rendering the building graph as an interactive SVG, updated in real time via WebSocket. Operators can trigger/clear simulated fires in any zone and query evacuation routes from any room, with the graph, risk score, and event log all updating live. Fixed a critical evacuation-logic flaw during development: originally, a room catching fire blocked its own only exit, incorrectly reporting occupants as fully trapped even when their own door was still physically usable. Redesigned the routing logic to distinguish three cases - a clean route avoiding all hazards, a route that must pass through the occupant's own hazard zone (flagged with a visible warning, since there is no alternate physical option), and genuine full isolation (correctly reported as requiring rescue). Also fixed a critical deadlock bug during backend development: a non-reentrant threading.Lock() caused the state snapshot method to hang indefinitely when it called another locked method from within an already-locked block - resolved by switching to threading.RLock().
-- [x] **Phase 11 - Multi-agent orchestration, MLOps and security hardening**
-  Multi-agent system with three specialist agents (Fire, Medical, Route) and an LLM-based Decision Agent coordinator that selectively consults only the agents relevant to each operator query, rather than always querying everything - includes a keyword-based offline routing fallback so selective consultation still works without API access. MLOps practices documented (model versioning, lightweight registry via recorded metrics, manually-identified failure modes, honest scoping of what a production deployment would still need). Added session-based authentication to the Phase 10 dashboard, protecting both HTTP routes and WebSocket actions, with credentials configurable via environment variables rather than hardcoded.
+- **Single building, single process.** One modelled building; live state lives in memory, so it runs as one worker and resets on restart. Multi-site or multi-worker would need Redis and persistent storage.
+- **Simulated sensors.** Telemetry comes from a simulator, not real hardware.
+- **Model accuracy.** Fire/smoke mAP50 is 0.576 and weaker in low light (daylight-skewed training data). Aerial recall is 0.512 - it misses about half the people, so treat detections as leads, not counts.
+- **Fall detection** needs the full body in frame; a desk-height laptop webcam often can't see the hips.
+- **Offline chat** is keyword routing - it answers from the right agents but can't reason across a nuanced question the way the LLM does.
+- **Free hosting** sleeps when idle, and there's no camera there.
+- **Not a certified safety system.** A portfolio project that demonstrates the architecture; it is not a replacement for a fire alarm system.
 
 ---
 
-## Tech stack
+## Engineering findings
 
-- **Computer Vision:** YOLOv8 (Ultralytics), OpenCV
-- **Custom Model Training:** Roboflow (dataset), Ultralytics CLI
-- **Sensor Simulation / Fusion Logic:** Python
-- **Graph Algorithms / Route Optimization:** NetworkX, Matplotlib
-- **NLP:** spaCy (pretrained NER) + custom rule-based classification
-- **LLM Integration:** Anthropic Claude API (tool-use/function-calling)
-- **Web Dashboard:** Flask, Flask-SocketIO (real-time WebSocket updates), vanilla JS/SVG frontend
-- **Multi-Agent Architecture:** Anthropic Claude API with specialist agent delegation
-- **Security:** Session-based authentication (Flask sessions), environment-variable credentials
-- **Language:** Python 3.11
-- **Runtime:** CPU-only inference and training (no GPU required)
+- **The live-vision lag was the server, not the model.** `eventlet` ran every thread as a green thread on one OS thread, so each ~200 ms YOLO inference froze the video stream, WebSocket and page loads, while buffered webcam frames piled up into 5-10 s of latency. Real threads plus a newest-frame-only grabber took it to ~120 ms.
+- **"Building risk" must not be an average.** One fire among ten zones averaged to a green "normal"; the UI now headlines the worst zone.
+- **Multimodal fusion reduces false confidence.** Camera-only detections are capped at moderate risk by design; only agreement between camera and sensors reaches CRITICAL.
+- **Evacuation logic needs three outcomes, not two.** A room on fire can still leave through its own door (flagged), versus rooms that are genuinely isolated.
+- **Bugs caught by testing in a real browser that unit tests couldn't:** a script-load-order bug that silently stopped evacuation routes from rendering, and an unauthenticated socket that stayed connected under a real server.
+- **Model availability is per account.** A hard-coded Groq model returned 404 for a real key; the app now asks the provider which models the key can use.
+- **Low-light / framing limits** of the detectors were measured, not assumed (per-keypoint confidence logging, a phone-in-hand capture to pick tracking thresholds).
 
----
+### Model weights
 
-## How to run the individual phases (archived)
-
-The per-phase folders are historical snapshots, now under `archive/phases/` (see its README). Each is self-contained with its own virtual environment; paths below are relative to `archive/phases/`. The live code is `aegis_core/` + `command_center/`.
-
-### Phase 1 - Vision pipeline (phase1_vision/)
-pip install ultralytics opencv-python
-python detect_webcam.py
-python crowd_count.py
-python fall_detection.py
-
-### Phase 3 - Fire/smoke detection (phase3_fire_smoke/)
-Model weights are not included in this repo.
-pip install ultralytics roboflow
-python download_dataset.py
-yolo task=detect mode=train model=yolov8n.pt data=dataset/data.yaml epochs=30 imgsz=416 batch=8 device=cpu
-
-### Phase 4 - Sensor fusion (phase4_sensor_fusion/)
-Requires the trained model from Phase 3 copied in as fire_smoke_model.pt
-pip install ultralytics opencv-python
-python sensor_simulator.py
-python fusion_engine.py
-python live_fusion_monitor.py
-
-### Phase 6 - Route optimization (phase6_route_optimization/)
-Requires the trained model from Phase 3 copied in as fire_smoke_model.pt
-pip install networkx matplotlib ultralytics opencv-python
-python building_graph.py
-python route_finder.py
-python integrated_monitor.py
-
-### Phase 7 - Drone aerial intelligence (phase7_drone_intelligence/)
-Model weights are not included in this repo.
-pip install ultralytics roboflow
-python download_dataset.py
-yolo task=detect mode=train model=yolov8n.pt data=Sard-4/data.yaml epochs=30 imgsz=416 batch=8 device=cpu
-python test_on_images.py
-
-### Phase 8 - NLP emergency reports (phase8_nlp_reports/)
-pip install spacy
-python -m spacy download en_core_web_sm
-python emergency_nlp.py
-python interactive_report_analyzer.py
-
-### Phase 9 - LLM command center (phase9_llm_command_center/)
-Requires an Anthropic API key set as environment variable ANTHROPIC_API_KEY. Falls back to an offline rule-based summary automatically if the key is missing or the API is unavailable.
-pip install anthropic
-python command_center.py
-
-### Phase 10 - Digital twin dashboard (phase10_digital_twin/)
-pip install flask flask-socketio networkx
-python server.py
-Then open http://127.0.0.1:5000 in a browser. Login required (default operator / aegisai2026, configurable via AEGISAI_USERNAME / AEGISAI_PASSWORD env vars).
-
-### Phase 11 - Multi-agent coordinator (phase11_multiagent_mlops_security/)
-Requires an Anthropic API key for full LLM-based routing; falls back to keyword-based offline routing otherwise.
-pip install anthropic
-python agents.py
-python coordinator.py
-See `archive/phases/phase11_multiagent_mlops_security/MLOPS.md` for MLOps practices documentation.
-
----
-
-## Model Weights
-
-Trained model weights (.pt files) are intentionally excluded from this repository. This is standard practice for ML projects - it keeps the repo lightweight and forces a reproducible training pipeline rather than relying on a committed binary. Training takes roughly 1-1.5 hours on a CPU-only laptop (tested on Intel i5 8th gen, 16GB RAM).
-
----
-
-## Notable engineering findings
-
-- **Fall detection camera-angle limitation:** Pose-based fall detection only works reliably when the full body is visible and correctly framed. A laptop webcam at desk height frequently fails to capture hip keypoints with sufficient confidence. Validated empirically by logging per-keypoint confidence scores across distances and poses.
-
-- **Fire/smoke low-light domain gap:** The custom-trained detector shows reduced confidence in low-light conditions since the training dataset skews toward daylight scenes - a known day/night domain gap in computer vision.
-
-- **Multimodal fusion reduces false confidence:** Camera-only detections are capped at moderate risk scores by design. Only when sensor readings and camera detection agree does the fused risk score reach HIGH/CRITICAL - demonstrating why real emergency systems combine multiple sensor types.
+Weights (`.pt`) aren't committed. They're reproducible from the dataset and training commands in [`archive/phases/`](archive/phases/README.md#running-an-individual-phase) (about 1-1.5 h each on a CPU laptop). The recorded metrics act as a lightweight model registry - see `archive/phases/phase11_multiagent_mlops_security/MLOPS.md`.
 
 ---
 
 ## Project structure
 
+```
 AegisAI/
-  aegis_core/             # Shared domain logic: digital twin + routing, sensor fusion, anomaly/trend
-                          #   detection, emergency NLP, event bus + incident timeline, agents, vision pipeline
-  command_center/         # Flask + Socket.IO web app (templates, static, tests, tools, model weights)
-  archive/phases/         # Historical per-phase snapshots (not maintained)
-    phase1_vision/          # Detection, tracking, crowd counting, fall detection
-    phase3_fire_smoke/      # Custom fire/smoke model training pipeline
-    phase4_sensor_fusion/   # Sensor simulation + multimodal risk fusion engine
-    phase5_prediction/      # Anomaly detection, trend prediction, full live monitor
-    phase6_route_optimization/  # Graph-based evacuation routing, integrated with fire detection
-    phase7_drone_intelligence/  # Aerial search-and-rescue pose detection (SARD dataset)
-    phase8_nlp_reports/     # Hybrid NLP pipeline for emergency report/call analysis
-    phase9_llm_command_center/  # Claude-powered Q&A over live system state, with offline fallback
-    phase10_digital_twin/   # Live web dashboard - interactive building visualization with real-time routing
-    phase11_multiagent_mlops_security/  # Multi-agent coordinator, MLOps documentation, and dashboard security hardening
-  ROADMAP.md              # Ongoing polish and upgrade plan
+  aegis_core/          domain logic (installable): twin + routing, fusion, NLP, event bus,
+                       agents + LLM coordinator, vision pipeline, guided scenario
+  command_center/      Flask + Socket.IO app: templates, static (design system, vendored libs),
+                       tests (255), tools (detection diagnostic)
+  archive/phases/      how it was built: 11 phase snapshots, per-phase instructions, training pipelines
+  docs/images/         README screenshots and the scenario GIF
+  Dockerfile, render.yaml, ROADMAP.md
+```
 
----
-
-## Why this project
-
-Built as a hands-on exploration of multimodal AI systems design - going beyond single-model computer vision projects into sensor fusion, predictive modeling, and decision-support architecture.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Built phase by phase - from a webcam detection script to a connected multimodal system; the full history is in [archive/phases](archive/phases/README.md) and the ongoing plan in [ROADMAP.md](ROADMAP.md).
