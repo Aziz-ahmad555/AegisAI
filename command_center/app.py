@@ -11,7 +11,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from aegis_core import coordinator
 from aegis_core.building_state import BuildingDigitalTwin
-from aegis_core.coordinator import get_client, init_agents
+from aegis_core.coordinator import init_agents
 from aegis_core.emergency_nlp import parse_emergency_report
 from aegis_core.sensor_state import SensorFusionState
 from aegis_core.system import AegisSystem
@@ -62,7 +62,10 @@ _allowed_origins = [o.strip() for o in os.environ.get("AEGISAI_ALLOWED_ORIGINS",
 socketio = SocketIO(app, cors_allowed_origins=_allowed_origins or None, async_mode="threading")
 
 twin = BuildingDigitalTwin()
-llm_client = get_client()
+# Chat LLM: groq / claude / offline, chosen from the environment (see
+# coordinator.get_llm). One status line at startup - never the key itself.
+llm_client, LLM_DESCRIPTION = coordinator.get_llm()
+print(f"LLM: {LLM_DESCRIPTION}", flush=True)
 sensors = SensorFusionState()
 if CLOUD_MODE:
     vision = None
@@ -168,8 +171,7 @@ def nlp_page():
 @login_required
 def chat_page():
     _chat_id()   # sessions from before chat memory existed get their id here
-    llm_status = "connected" if llm_client else "offline (keyword-routing fallback)"
-    return render_template("chat.html", llm_status=llm_status, llm_model=coordinator.MODEL)
+    return render_template("chat.html", llm=llm_client, llm_description=LLM_DESCRIPTION)
 
 
 @app.route("/sensors")
@@ -265,7 +267,8 @@ def api_chat():
     answer = coordinator.ask_coordinator(question, llm_client, _chat_history())
     _remember_turn(question, answer)
     mode = "llm" if llm_client else "offline"
-    return jsonify({"answer": answer, "mode": mode})
+    provider = llm_client.describe() if llm_client else LLM_DESCRIPTION
+    return jsonify({"answer": answer, "mode": mode, "provider": provider})
 
 
 # --- chat memory ---------------------------------------------------------------

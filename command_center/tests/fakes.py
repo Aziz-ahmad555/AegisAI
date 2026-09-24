@@ -59,3 +59,63 @@ class FakeClient:
 
 def connection_error():
     return anthropic.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
+
+
+def claude(turns):
+    """An LLM wired to a scripted fake Anthropic client."""
+    from aegis_core.coordinator import LLM, MODEL
+
+    return LLM("claude", MODEL, FakeClient(turns))
+
+
+# ----- Groq (OpenAI-compatible chat completions) -------------------------------------------
+
+def _chunk(content=None, tool_calls=None, finish=None):
+    delta = SimpleNamespace(content=content, tool_calls=tool_calls)
+    return SimpleNamespace(choices=[SimpleNamespace(delta=delta, finish_reason=finish)])
+
+
+def _tc(index, id_=None, name=None, arguments=None):
+    fn = SimpleNamespace(name=name, arguments=arguments)
+    return SimpleNamespace(index=index, id=id_, function=fn)
+
+
+def groq_text(text, finish="stop"):
+    """A streamed text-only turn, split into two chunks."""
+    half = len(text) // 2
+    return [_chunk(content=text[:half]), _chunk(content=text[half:]), _chunk(finish=finish)]
+
+
+def groq_tool_calls(*calls, text=None, finish="tool_calls"):
+    """A streamed tool-call turn. Each call is (id, name, arguments_json); the
+    id/name and the arguments arrive in separate fragments, like the real API."""
+    chunks = [_chunk(content=text)] if text else []
+    for i, (id_, name, args) in enumerate(calls):
+        chunks.append(_chunk(tool_calls=[_tc(i, id_=id_, name=name, arguments="")]))
+        half = len(args) // 2
+        chunks.append(_chunk(tool_calls=[_tc(i, arguments=args[:half])]))
+        chunks.append(_chunk(tool_calls=[_tc(i, arguments=args[half:])]))
+    chunks.append(_chunk(finish=finish))
+    return chunks
+
+
+class FakeGroqClient:
+    """Mimics groq.Groq().chat.completions.create(stream=True)."""
+
+    def __init__(self, turns):
+        self.turns = list(turns)
+        self.requests = []
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, **kwargs):
+        self.requests.append({**kwargs, "messages": [dict(m) for m in kwargs["messages"]]})
+        turn = self.turns.pop(0) if len(self.turns) > 1 else self.turns[0]
+        if isinstance(turn, Exception):
+            raise turn
+        return iter(turn)
+
+
+def groq(turns):
+    from aegis_core.coordinator import GROQ_MODEL, LLM
+
+    return LLM("groq", GROQ_MODEL, FakeGroqClient(turns))

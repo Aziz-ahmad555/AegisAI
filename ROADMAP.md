@@ -91,6 +91,7 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 - [x] Chat answers stream over Socket.IO to the asking browser only; refusals and mid-stream failures discard partial text and fall back to the offline summary.
 - [x] 5-round tool cap kept; truncated tool calls never run; tool input validated; 60 s client timeout; consulted agents shown as chips on each answer.
 - [x] Conversation memory: last 6 Q/A pairs per login (server-side, bounded); "New conversation" clears it.
+- [x] Groq provider (`AEGISAI_LLM_PROVIDER` = groq | claude | offline; groq is the default when `GROQ_API_KEY` is set) with the same streaming, 5-round cap, memory, fallbacks and injection guard; startup `LLM:` line and chat badge show the active provider.
 - [ ] Every agent answer cites the state it used (zone, reading, timestamp). Agent data already carries zones, readings and ages; making the answer cite them needs a real-API evaluation (no API key available in this environment yet).
 
 ## Stage 6 — Frontend redesign & UX

@@ -26,6 +26,10 @@ Open http://127.0.0.1:5000 and log in with **operator / aegisai2026** (the local
 
 `pip install -e ..` installs the shared `aegis_core` package (the domain logic the app runs on) in editable mode.
 
+### Command Chat LLM (Groq or Claude)
+
+Command Chat's decision agent runs on **Groq** or **Claude**, falling back to offline keyword routing when neither is configured. Set a key before starting the app, e.g. `$env:GROQ_API_KEY = '...'` (PowerShell); `AEGISAI_LLM_PROVIDER=groq|claude|offline` forces a choice. The console prints the active provider at startup (`LLM: groq / llama-3.3-70b-versatile`), and the chat page badge shows it too.
+
 ### Using your own password
 
 Only a hash of the password is stored. Generate it (you're prompted; nothing is echoed or kept in shell history):
@@ -52,7 +56,7 @@ pip install -r command_center/requirements-cloud.txt && pip install .
 gunicorn -k gthread -w 1 --threads 50 --chdir command_center -b 0.0.0.0:$PORT app:app
 ```
 
-Development: `pip install -r command_center/requirements-dev.txt`, then from the repo root run `python -m pytest` (127 tests) and `ruff check aegis_core command_center`. `pre-commit install` runs ruff on every commit. CI runs both on every push.
+Development: `pip install -r command_center/requirements-dev.txt`, then from the repo root run `python -m pytest` (159 tests) and `ruff check aegis_core command_center`. `pre-commit install` runs ruff on every commit. CI runs both on every push.
 
 See [ROADMAP.md](ROADMAP.md) for the ongoing polish and upgrade plan.
 

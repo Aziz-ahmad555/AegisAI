@@ -37,6 +37,7 @@
         border-radius: 4px; cursor: pointer; font-size: 0.8em; font-family: 'IBM Plex Sans', sans-serif;
     }
     .suggested:hover { color: var(--text); border-color: var(--amber); }
+    .chat-offline-reason { margin: -10px 0 16px 0; font-size: 0.76em; color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; }
     .msg-agents:empty, .msg-notice:empty, .msg-meta:empty { display: none; }
     .msg-agents { display: flex; gap: 5px; margin-bottom: 7px; flex-wrap: wrap; }
     .agent-chip {
@@ -53,10 +54,11 @@
     .new-chat:hover { color: var(--text); border-color: var(--text-dim); }
 </style>
 
-<div class="chat-status {{ 'status-connected' if llm_status == 'connected' else 'status-offline' }}">
+<div class="chat-status {{ 'status-connected' if llm else 'status-offline' }}" title="{{ llm_description }}">
     <span class="status-dot"></span>
-    {% if llm_status == 'connected' %}Connected &middot; {{ llm_model }}{% else %}Offline &middot; keyword routing{% endif %}
+    {% if llm %}Connected &middot; {{ llm.provider }} &middot; {{ llm.model }}{% else %}Offline &middot; keyword routing{% endif %}
 </div>
+{% if not llm %}<div class="chat-offline-reason">{{ llm_description }}</div>{% endif %}
 
 <div style="display: flex; gap: 18px;">
     <div class="card" style="flex: 3;">
@@ -130,7 +132,7 @@
         } else if (ev.type === "notice") {
             c.el.querySelector(".msg-notice").textContent = ev.text;
         } else if (ev.type === "mode") {
-            c.el.querySelector(".msg-meta").textContent = ev.mode === "llm" ? "Claude" : "offline keyword routing";
+            c.el.querySelector(".msg-meta").textContent = ev.mode === "llm" ? (ev.provider + " · " + ev.model) : "offline keyword routing";
         } else if (ev.type === "error") {
             c.body.textContent = ev.text;
         } else if (ev.type === "done") {

@@ -105,14 +105,15 @@ def _collect_chat(sio, timeout=10.0):
 
 
 def test_chat_streams_to_the_asker_and_remembers_the_conversation(client, monkeypatch):
-    from fakes import FakeClient, text, tool
+    from fakes import claude, text, tool
 
-    fake = FakeClient([
+    llm = claude([
         ("tool_use", [tool("consult_route_agent")]),
         ("end_turn", [text("All routes are open.")]),
         ("end_turn", [text("Room202 exits via Stairwell.")]),
     ])
-    monkeypatch.setattr(aegis, "llm_client", fake)
+    monkeypatch.setattr(aegis, "llm_client", llm)
+    fake = llm.client
     login(client)
     asker = aegis.socketio.test_client(aegis.app, flask_test_client=client)
     other = aegis.socketio.test_client(aegis.app, flask_test_client=client)
@@ -150,8 +151,8 @@ def test_chat_socket_rejects_oversized_question(client):
 
 
 def test_chat_page_shows_the_configured_model(client, monkeypatch):
-    from fakes import FakeClient
+    from fakes import claude
 
-    monkeypatch.setattr(aegis, "llm_client", FakeClient([("end_turn", [])]))
+    monkeypatch.setattr(aegis, "llm_client", claude([("end_turn", [])]))
     login(client)
     assert b"claude-opus-5" in client.get("/chat").data
