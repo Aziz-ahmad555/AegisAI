@@ -54,7 +54,7 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 - [x] Re-encode `requirements.txt` as UTF-8 (it's UTF-16) and split: `requirements.txt` (full, local w/ vision) and `requirements-cloud.txt` (no torch/ultralytics).
 - [x] Remove stray debug/output files (`phase10_digital_twin/output.txt`, `result.txt`, `debug_test.py`).
 - [x] Add `.env.example` documenting every env var.
-- [ ] Add `pyproject.toml` with ruff config + pre-commit hooks.
+- [x] `pyproject.toml` (package + pytest + ruff config) and a ruff pre-commit hook.
 
 ## Stage 2 — Make it one connected system (biggest credibility gain)
 
@@ -69,10 +69,10 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 3 — Tests & CI
 
-- [ ] pytest suite: routing (clean / through-hazard / fully isolated), NLP extraction edge cases, fusion scoring & risk bands, anomaly detector, trend predictor, twin thread-safety.
-- [ ] Flask tests: every route requires login, WebSocket actions reject unauthenticated sessions, API input validation.
-- [ ] Coordinator tests: offline keyword routing; LLM path with a mocked client; tool-loop termination.
-- [ ] GitHub Actions: ruff + pytest on every push; badge in README.
+- [x] pytest suite: routing (clean / through-hazard / fully isolated), NLP extraction edge cases, fusion scoring & risk bands, anomaly detector, trend predictor, twin thread-safety. Found and fixed two NLP bugs ('stuck' reports rated LOW; 'water is rising' not a flood).
+- [x] Flask tests: every route requires login, WebSocket actions reject unauthenticated sessions, API input validation.
+- [x] Coordinator tests: offline keyword routing; LLM path with a fake client; tool-loop termination (loop now capped at 5 rounds).
+- [x] GitHub Actions: ruff + pytest on every push (cloud requirement set, Python 3.11); badge in README.
 
 ## Stage 4 — Security hardening
 

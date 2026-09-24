@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint + tests (cloud mode, no camera)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            command_center/requirements-cloud.txt
+            command_center/requirements-dev.txt
+
+      # The cloud requirement set is what the hosted app runs on (no torch /
+      # ultralytics / opencv); tests run in cloud mode, so vision is skipped.
+      - name: Install
+        run: |
+          pip install -r command_center/requirements-cloud.txt -r command_center/requirements-dev.txt
+          pip install -e .
+
+      - name: Ruff
+        run: ruff check aegis_core command_center
+
+      - name: Pytest
+        run: python -m pytest -q

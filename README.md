@@ -1,6 +1,8 @@
 # AegisAI
 ### Autonomous Multimodal Emergency Intelligence & Disaster Response Platform
 
+[![CI](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml/badge.svg)](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml)
+
 A real-time AI system for emergency detection, risk prediction, and disaster response - built in phases, starting from core computer vision and scaling toward a full multimodal intelligence platform (sensor fusion, predictive risk modeling, route optimization, and LLM-assisted decision support).
 
 Inspired by how real-world smart-city and campus command centers monitor and respond to emergencies - not just detecting one event type, but reasoning across multiple data sources in real time.
@@ -31,7 +33,7 @@ pip install -r command_center/requirements-cloud.txt && pip install .
 gunicorn -k gthread -w 1 --threads 50 --chdir command_center -b 0.0.0.0:$PORT app:app
 ```
 
-Run the tests from the repo root with `python -m pytest`.
+Development: `pip install -r command_center/requirements-dev.txt`, then from the repo root run `python -m pytest` (101 tests) and `ruff check aegis_core command_center`. `pre-commit install` runs ruff on every commit. CI runs both on every push.
 
 See [ROADMAP.md](ROADMAP.md) for the ongoing polish and upgrade plan.
 
