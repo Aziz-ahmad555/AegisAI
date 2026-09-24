@@ -47,7 +47,7 @@ def answer_text(events):
 @pytest.mark.parametrize("env, provider, description_part", [
     ({}, None, "no key found"),
     ({"GROQ_API_KEY": FAKE_KEY}, "groq", "groq / openai/gpt-oss-120b"),
-    ({"ANTHROPIC_API_KEY": "sk-ant-test"}, "claude", "claude / claude-opus-5"),
+    ({"ANTHROPIC_API_KEY": "sk-ant-test"}, "claude", "claude / claude-sonnet-5"),
     ({"GROQ_API_KEY": FAKE_KEY, "ANTHROPIC_API_KEY": "sk-ant-test"}, "groq", "groq /"),     # groq wins when both
     ({"GROQ_API_KEY": FAKE_KEY, "ANTHROPIC_API_KEY": "sk-ant-test", "AEGISAI_LLM_PROVIDER": "claude"}, "claude", "claude /"),
     ({"GROQ_API_KEY": FAKE_KEY, "AEGISAI_LLM_PROVIDER": "offline"}, None, "AEGISAI_LLM_PROVIDER=offline"),

@@ -87,7 +87,7 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 5 — LLM & agent upgrades
 
-- [x] Current Claude model (`claude-opus-5`, verified against Anthropic's model docs); `AEGISAI_CLAUDE_MODEL` / `AEGISAI_CLAUDE_EFFORT` configurable; server-side refusal fallbacks on by default.
+- [x] Current Claude model (default `claude-sonnet-5`, verified against Anthropic's model docs); `AEGISAI_CLAUDE_MODEL` / `AEGISAI_CLAUDE_EFFORT` configurable; server-side refusal fallbacks on by default for Opus 5 / Fable 5.1, opt-in otherwise.
 - [x] Chat answers stream over Socket.IO to the asking browser only; refusals and mid-stream failures discard partial text and fall back to the offline summary.
 - [x] 5-round tool cap kept; truncated tool calls never run; tool input validated; 60 s client timeout; consulted agents shown as chips on each answer.
 - [x] Conversation memory: last 6 Q/A pairs per login (server-side, bounded); "New conversation" clears it.

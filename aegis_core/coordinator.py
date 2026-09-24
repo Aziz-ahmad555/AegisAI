@@ -12,17 +12,32 @@ from .agents import FireAgent, MedicalAgent, RouteAgent
 # GROQ_API_KEY is set, else claude if ANTHROPIC_API_KEY is set, else offline
 # keyword routing. Keys are only ever read from the environment, never logged.
 
-# Claude: current default model per Anthropic's model docs (verified 2026-09-24).
-MODEL = os.environ.get("AEGISAI_CLAUDE_MODEL", "claude-opus-5")
+# Claude: Sonnet 5 per Anthropic's model docs (exact id verified 2026-09-24);
+# adaptive thinking is on by default, full low..max effort range.
+MODEL = os.environ.get("AEGISAI_CLAUDE_MODEL", "claude-sonnet-5")
 # Effort trades answer depth against latency/cost. Operator Q&A over a small
 # amount of live state is latency-sensitive, so this starts at "medium";
 # raise it if answers prove too shallow (low | medium | high | xhigh | max).
 EFFORT = os.environ.get("AEGISAI_CLAUDE_EFFORT", "medium")
 MAX_TOKENS = 16000
-# If Claude's safety classifiers decline a request, Anthropic re-runs it
-# server-side on the recommended fallback model instead of returning a refusal.
+# If Claude's safety classifiers decline a request, Anthropic can re-run it
+# server-side on a recommended fallback model. The docs recommend this by
+# default for Opus 5 / Fable 5.1; for other models fallback targets must be
+# in the model's allowed list, so it's opt-in there (AEGISAI_CLAUDE_FALLBACKS)
+# rather than risking every request being rejected. Refusals are handled via
+# stop_reason either way.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
-USE_FALLBACKS = os.environ.get("AEGISAI_CLAUDE_FALLBACKS", "true").lower() == "true"
+FALLBACK_DEFAULT_MODELS = {"claude-opus-5", "claude-fable-5-1"}
+
+
+def fallbacks_enabled(model, setting=None):
+    """Explicit AEGISAI_CLAUDE_FALLBACKS true/false wins; otherwise on only
+    for the models whose docs recommend it."""
+    setting = (setting or "").strip().lower()
+    return setting == "true" if setting else model in FALLBACK_DEFAULT_MODELS
+
+
+USE_FALLBACKS = fallbacks_enabled(MODEL, os.environ.get("AEGISAI_CLAUDE_FALLBACKS"))
 
 # Groq: production (not preview) models with tool-use support, per Groq's
 # models + tool-use docs (2026-09-24), in order of preference. Availability

@@ -155,4 +155,4 @@ def test_chat_page_shows_the_configured_model(client, monkeypatch):
 
     monkeypatch.setattr(aegis, "llm_client", claude([("end_turn", [])]))
     login(client)
-    assert b"claude-opus-5" in client.get("/chat").data
+    assert b"claude-sonnet-5" in client.get("/chat").data

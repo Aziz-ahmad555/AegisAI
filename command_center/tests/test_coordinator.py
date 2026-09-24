@@ -58,15 +58,34 @@ def test_offline_events_name_the_consulted_agents():
 
 # --- request shape ---------------------------------------------------------------------
 
-def test_request_uses_current_model_effort_and_server_side_fallbacks():
+def test_request_uses_sonnet_5_and_effort_without_fallbacks_by_default():
     llm = claude([("end_turn", [text("All clear.")])])
     run("status?", llm)
     req = llm.client.requests[0]
-    assert req["model"] == coordinator.MODEL == "claude-opus-5"
+    assert req["model"] == coordinator.MODEL == "claude-sonnet-5"
     assert req["output_config"] == {"effort": coordinator.EFFORT}
-    assert req["betas"] == ["server-side-fallback-2026-07-01"] and req["fallbacks"] == "default"
+    assert "fallbacks" not in req and "betas" not in req
     assert all(t["eager_input_streaming"] for t in req["tools"])
-    assert "thinking" not in req          # Opus 5 runs adaptive thinking by default
+    assert "thinking" not in req and "temperature" not in req   # Sonnet 5: adaptive by default, no sampling params
+
+
+def test_server_side_fallbacks_are_sent_when_enabled(monkeypatch):
+    monkeypatch.setattr(coordinator, "USE_FALLBACKS", True)
+    llm = claude([("end_turn", [text("All clear.")])])
+    run("status?", llm)
+    req = llm.client.requests[0]
+    assert req["betas"] == ["server-side-fallback-2026-07-01"] and req["fallbacks"] == "default"
+
+
+@pytest.mark.parametrize("model, setting, expected", [
+    ("claude-sonnet-5", None, False),
+    ("claude-opus-5", None, True),
+    ("claude-fable-5-1", "", True),
+    ("claude-sonnet-5", "true", True),
+    ("claude-opus-5", "FALSE", False),
+])
+def test_fallback_default_depends_on_model(model, setting, expected):
+    assert coordinator.fallbacks_enabled(model, setting) is expected
 
 
 # --- streaming tool loop -------------------------------------------------------------------
