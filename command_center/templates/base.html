@@ -1,193 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Aegis Command</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --base: #0b0d10;
-            --panel: #14171b;
-            --panel-raised: #191d22;
-            --line: #262b31;
-            --text: #e8e6e1;
-            --text-dim: #8a8f96;
-            --text-faint: #565c64;
-            --amber: #e8a33d;
-            --amber-dim: #7a5a25;
-            --green: #4caf6d;
-            --red: #e5484d;
-            --cyan: #4fa8d8;
-        }
-        * { box-sizing: border-box; }
-        body {
-            background: var(--base);
-            color: var(--text);
-            font-family: 'IBM Plex Sans', Arial, sans-serif;
-            margin: 0;
-            display: flex;
-            min-height: 100vh;
-            font-size: 15px;
-        }
-        .mono { font-family: 'IBM Plex Mono', monospace; }
-
-        #sidebar {
-            width: 228px;
-            background: var(--panel);
-            border-right: 1px solid var(--line);
-            flex-shrink: 0;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-        #sidebar .brand {
-            padding: 22px 22px 18px 22px;
-        }
-        #sidebar .brand .mark {
-            display: inline-flex;
-            align-items: center;
-            gap: 9px;
-        }
-        #sidebar .brand .dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            background: var(--amber);
-            box-shadow: 0 0 8px var(--amber);
-        }
-        #sidebar .brand h1 {
-            font-size: 1.08em;
-            font-weight: 600;
-            margin: 0;
-            letter-spacing: 0.01em;
-        }
-        #sidebar .brand .sub {
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.68em;
-            color: var(--text-faint);
-            margin-top: 6px;
-            letter-spacing: 0.03em;
-        }
-        #sidebar nav {
-            padding: 6px 0 16px 0;
-            border-top: 1px solid var(--line);
-        }
-        #sidebar nav a {
-            display: block;
-            padding: 9px 22px;
-            color: var(--text-dim);
-            text-decoration: none;
-            font-size: 0.92em;
-            border-left: 2px solid transparent;
-        }
-        #sidebar nav a:hover {
-            color: var(--text);
-            background: var(--panel-raised);
-        }
-        #sidebar nav a.active {
-            color: var(--amber);
-            border-left: 2px solid var(--amber);
-            background: var(--panel-raised);
-        }
-        #sidebar .foot {
-            margin-top: auto;
-            padding: 14px 22px 18px 22px;
-            border-top: 1px solid var(--line);
-        }
-        #sidebar .foot a {
-            color: var(--text-faint);
-            font-size: 0.8em;
-            text-decoration: none;
-        }
-        #sidebar .foot a:hover { color: var(--text-dim); }
-
-        #main {
-            margin-left: 228px;
-            flex: 1;
-            padding: 30px 40px 60px 40px;
-            max-width: calc(100vw - 228px);
-        }
-        .page-header { margin-bottom: 26px; }
-        .page-header h2 {
-            margin: 0 0 6px 0;
-            font-size: 1.5em;
-            font-weight: 600;
-            letter-spacing: -0.01em;
-        }
-        .page-header .desc {
-            color: var(--text-dim);
-            font-size: 0.94em;
-            max-width: 640px;
-            line-height: 1.5;
-        }
-        .card {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 4px;
-            padding: 18px;
-        }
-        #sidebar .brand .dot.offline { background: var(--text-faint); box-shadow: none; }
-
-        /* Pending actions tray (bottom-right, every page) */
-        #action-tray {
-            position: fixed; right: 20px; bottom: 20px; width: 340px; z-index: 50;
-            display: flex; flex-direction: column; gap: 10px;
-        }
-        .action-card {
-            background: var(--panel-raised); border: 1px solid var(--amber); border-radius: 4px;
-            padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-        }
-        .action-head {
-            font-size: 0.72em; color: var(--amber); font-weight: 600; letter-spacing: 0.04em;
-            text-transform: uppercase; display: flex; justify-content: space-between;
-        }
-        .action-src { color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; text-transform: none; font-weight: 400; }
-        .action-reason { margin: 7px 0 10px 0; font-size: 0.9em; line-height: 1.45; }
-        .action-buttons { display: flex; gap: 8px; }
-        .action-buttons button {
-            flex: 1; padding: 7px; border-radius: 4px; cursor: pointer; font-size: 0.84em;
-            font-family: 'IBM Plex Sans', sans-serif; font-weight: 600;
-        }
-        .btn-confirm { background: var(--red); border: 1px solid var(--red); color: #fff; }
-        .btn-dismiss { background: transparent; border: 1px solid var(--line); color: var(--text-dim); }
-        .btn-dismiss:hover { color: var(--text); border-color: var(--text-dim); }
-        .action-buttons button:disabled { opacity: 0.5; cursor: default; }
-
-        /* Toasts (top-right) */
-        #toast-stack {
-            position: fixed; top: 18px; right: 20px; width: 340px; z-index: 60;
-            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
-        }
-        .toast {
-            background: var(--panel-raised); border: 1px solid var(--line); border-left: 3px solid var(--amber);
-            border-radius: 4px; padding: 10px 12px; font-size: 0.85em; line-height: 1.4;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); transition: opacity 0.5s, transform 0.5s;
-        }
-        .toast-critical { border-left-color: var(--red); }
-        .toast-out { opacity: 0; transform: translateX(12px); }
-        .toast-src, .tl-src {
-            font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; color: var(--text-faint);
-            margin-right: 8px; text-transform: uppercase;
-        }
-
-        /* Incident timeline */
-        .tl-row {
-            display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 7px 0 7px 10px;
-            border-left: 2px solid var(--line); border-bottom: 1px solid var(--line); font-size: 0.84em;
-        }
-        .tl-warning { border-left-color: var(--amber); }
-        .tl-critical { border-left-color: var(--red); }
-        .tl-time { font-family: 'IBM Plex Mono', monospace; color: var(--text-faint); font-size: 0.85em; }
-        .tl-msg { flex: 1 1 200px; }
-        .tl-zone, .tl-conf {
-            font-family: 'IBM Plex Mono', monospace; font-size: 0.78em; color: var(--cyan);
-            border: 1px solid var(--line); border-radius: 3px; padding: 0 5px;
-        }
-        .tl-empty { color: var(--text-faint); font-size: 0.85em; padding: 8px 0; }
-        @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Aegis Command{% endblock %}</title>
+    <link rel="preload" href="{{ url_for('static', filename='fonts/ibm-plex-sans-latin-var.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/aegis.css') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="{{ url_for('static', filename='vendor/socket.io-4.7.2.min.js') }}"></script>
     <script>
@@ -212,40 +30,61 @@
     </script>
 </head>
 <body>
-    <div id="sidebar">
+<div class="app">
+    <aside class="sidebar" aria-label="Navigation">
         <div class="brand">
-            <div class="mark">
-                <span class="dot"></span>
-                <h1>Aegis</h1>
-            </div>
-            <div class="sub">EMERGENCY INTELLIGENCE</div>
+            <div class="brand-mark"><span class="brand-dot" id="brand-dot"></span><h1>Aegis</h1></div>
+            <div class="brand-sub">EMERGENCY INTELLIGENCE</div>
         </div>
-        <nav>
-            <a href="/" class="nav-link">Overview</a>
-            {% if not cloud_mode %}<a href="/vision" class="nav-link">Live Vision</a>{% endif %}
-            <a href="/sensors" class="nav-link">Sensor Fusion</a>
-            <a href="/twin" class="nav-link">Digital Twin</a>
-            <a href="/aerial" class="nav-link">Aerial Search</a>
-            <a href="/nlp" class="nav-link">Report Analyzer</a>
-            <a href="/chat" class="nav-link">Command Chat</a>
+        <nav class="nav">
+            <a href="/">Overview</a>
+            <a href="/twin">Digital Twin</a>
+            <a href="/sensors">Sensor Fusion</a>
+            {% if not cloud_mode %}<a href="/vision">Live Vision</a>{% endif %}
+            <a href="/nlp">Report Analyzer</a>
+            <a href="/chat">Command Chat</a>
+            <a href="/aerial">Aerial Search</a>
         </nav>
-        <div class="foot">
-            <a href="/logout">Sign out</a>
-        </div>
-    </div>
+        <div class="sidebar-foot"><a href="/logout">Sign out</a></div>
+    </aside>
 
-    <div id="main">
-        {% block content %}{% endblock %}
-    </div>
+    <div class="main">
+        <header class="statusbar" aria-live="polite">
+            <div class="threat" id="threat" data-level="NORMAL">
+                <div>
+                    <div class="threat-label">THREAT LEVEL</div>
+                    <div class="threat-level" id="threat-level">NORMAL</div>
+                </div>
+                <div class="threat-detail" id="threat-detail">Connecting&hellip;</div>
+            </div>
+            <div class="status-cells">
+                <div class="status-cell" id="cell-fires"><span class="k">Active fires</span><span class="v" id="status-fires">&ndash;</span></div>
+                <div class="status-cell" id="cell-pending"><span class="k">Awaiting confirmation</span><span class="v" id="status-pending">&ndash;</span></div>
+                <div class="status-cell"><span class="k">Sensors</span><span class="v" id="status-sensors">&ndash;</span></div>
+                <div class="status-cell status-conn"><span class="k">Link &middot; Chat LLM</span>
+                    <span class="v"><span class="conn-dot offline" id="conn-dot"></span><span id="conn-text">connecting</span> &middot; <span class="mono">{{ llm_label }}</span></span>
+                </div>
+            </div>
+        </header>
 
-    <script>
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script>
+    (function () {
         var path = window.location.pathname;
-        document.querySelectorAll(".nav-link").forEach(function(link) {
+        document.querySelectorAll(".nav a").forEach(function (link) {
             if (link.getAttribute("href") === path) {
                 link.classList.add("active");
+                link.setAttribute("aria-current", "page");
             }
         });
-    </script>
-    <script src="{{ url_for('static', filename='js/incidents.js') }}"></script>
+    })();
+</script>
+<script src="{{ url_for('static', filename='js/status.js') }}"></script>
+<script src="{{ url_for('static', filename='js/incidents.js') }}"></script>
 </body>
 </html>

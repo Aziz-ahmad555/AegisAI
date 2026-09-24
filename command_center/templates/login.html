@@ -1,92 +1,35 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aegis Command - Sign in</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --base: #0b0d10;
-            --panel: #14171b;
-            --line: #262b31;
-            --text: #e8e6e1;
-            --text-dim: #8a8f96;
-            --text-faint: #565c64;
-            --amber: #e8a33d;
-            --red: #e5484d;
-        }
-        * { box-sizing: border-box; }
-        body {
-            background: var(--base);
-            color: var(--text);
-            font-family: 'IBM Plex Sans', Arial, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .login-box {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 4px;
-            padding: 36px;
-            width: 320px;
-        }
-        .mark { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
-        .dot {
-            width: 9px; height: 9px; border-radius: 50%;
-            background: var(--amber); box-shadow: 0 0 8px var(--amber);
-        }
-        h1 { font-size: 1.15em; font-weight: 600; margin: 0; }
-        .tag {
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.68em;
-            color: var(--text-faint);
-            letter-spacing: 0.03em;
-            margin-bottom: 24px;
-        }
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 6px 0;
-            background: var(--base);
-            color: var(--text);
-            border: 1px solid var(--line);
-            border-radius: 4px;
-            font-family: 'IBM Plex Sans', Arial, sans-serif;
-            box-sizing: border-box;
-        }
-        input:focus { outline: none; border-color: var(--amber); }
-        button {
-            width: 100%;
-            padding: 10px;
-            margin-top: 14px;
-            background: var(--amber);
-            color: #1a1305;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 600;
-        }
-        button:hover { background: #f0ad4f; }
-        .error { color: var(--red); font-size: 0.85em; margin-top: 10px; }
-        .note { color: var(--text-faint); font-size: 0.76em; margin-top: 18px; line-height: 1.5; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/aegis.css') }}">
 </head>
 <body>
-    <div class="login-box">
-        <div class="mark"><span class="dot"></span><h1>Aegis</h1></div>
-        <div class="tag">EMERGENCY INTELLIGENCE</div>
-        <form method="POST">
+<main class="login-page">
+    <section class="card login-box" aria-labelledby="login-title">
+        <div class="brand-mark"><span class="brand-dot"></span><h1 id="login-title" style="margin: 0; font-size: var(--fs-lg);">Aegis</h1></div>
+        <div class="brand-sub">EMERGENCY INTELLIGENCE</div>
+
+        <form method="POST" novalidate>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="text" name="username" placeholder="Username" autocomplete="username" required>
-            <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
-            <button type="submit">Sign in</button>
+            <div>
+                <label class="lbl" for="username">Username</label>
+                <input class="field" type="text" id="username" name="username" autocomplete="username" required autofocus>
+            </div>
+            <div>
+                <label class="lbl" for="password">Password</label>
+                <input class="field" type="password" id="password" name="password" autocomplete="current-password" required>
+            </div>
+            {% if error %}<div class="notice notice-warn" role="alert">{{ error }}</div>{% endif %}
+            <button class="btn btn-primary btn-block" type="submit">Sign in</button>
         </form>
-        {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        {% if show_default_login %}<div class="note">Local demo login: operator / aegisai2026 &mdash; set AEGISAI_PASSWORD_HASH to use your own password.</div>{% endif %}
-    </div>
+
+        {% if show_default_login %}
+        <p class="faint" style="font-size: 13px; margin: var(--s4) 0 0;">Local demo login: <span class="mono">operator / aegisai2026</span>. Set <span class="mono">AEGISAI_PASSWORD_HASH</span> to use your own password.</p>
+        {% endif %}
+    </section>
+</main>
 </body>
 </html>

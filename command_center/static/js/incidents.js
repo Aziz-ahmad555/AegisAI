@@ -21,12 +21,14 @@
     function renderActions(actions) {
         tray.innerHTML = actions.map(function (a) {
             var conf = a.confidence != null ? " &middot; conf " + esc(a.confidence) : "";
-            return '<div class="action-card" data-id="' + esc(a.id) + '">' +
+            // Confirming a fire declaration is a danger action -> red button.
+            var confirmLabel = a.action === "declare_fire" ? "Declare fire" : "Confirm";
+            return '<div class="action-card" role="alertdialog" aria-label="Confirmation needed" data-id="' + esc(a.id) + '">' +
                 '<div class="action-head">Needs confirmation <span class="action-src">' + esc(a.source) + conf + "</span></div>" +
                 '<div class="action-reason">' + esc(a.reason) + "</div>" +
                 '<div class="action-buttons">' +
-                '<button class="btn-confirm" data-approve="1">Confirm</button>' +
-                '<button class="btn-dismiss" data-approve="0">Dismiss</button>' +
+                '<button class="btn btn-danger" data-approve="1">' + confirmLabel + '</button>' +
+                '<button class="btn btn-ghost" data-approve="0">Dismiss</button>' +
                 "</div></div>";
         }).join("");
     }
@@ -86,8 +88,4 @@
         if (e.severity !== "info") toast(e);
     });
 
-    // ----- connection state --------------------------------------------------
-    var dot = document.querySelector("#sidebar .brand .dot");
-    socket.on("connect", function () { if (dot) dot.classList.remove("offline"); });
-    socket.on("disconnect", function () { if (dot) dot.classList.add("offline"); });
 })();

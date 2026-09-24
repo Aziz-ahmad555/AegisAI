@@ -44,6 +44,9 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=CLOUD_MODE,      # hosted = HTTPS; local http://127.0.0.1 must still work
+    # Static assets (vendored libraries, fonts, CSS, JS) are cacheable; Flask
+    # still revalidates with ETag/Last-Modified after this, so edits show up.
+    SEND_FILE_MAX_AGE_DEFAULT=3600,
 )
 if os.environ.get("AEGISAI_TRUST_PROXY", "false").lower() == "true":
     # Behind a hosting proxy every request comes from the proxy's IP; trust its
@@ -88,6 +91,7 @@ def inject_template_globals():
         "csrf_token": security.csrf_token,
         # Only advertise the built-in demo login when it's actually in use.
         "show_default_login": not CLOUD_MODE and credentials.uses_default_password,
+        "llm_label": llm_client.describe() if llm_client else "offline",
     }
 
 
@@ -178,7 +182,7 @@ def chat_page():
 @app.route("/sensors")
 @login_required
 def sensors_page():
-    return render_template("sensors.html")
+    return render_template("sensors.html", sensor_zone=system.sensor_zone())
 
 
 @app.route("/aerial")
@@ -193,7 +197,7 @@ def vision_page():
     if CLOUD_MODE:
         return render_template("vision_disabled.html")
     vision.start()
-    return render_template("vision.html")
+    return render_template("vision.html", camera_zone=system.camera_zone())
 
 
 @app.route("/video_feed")
@@ -470,9 +474,16 @@ def handle_trigger_sensor_event():
 
 
 def periodic_broadcast():
+    # Sensors change every tick (live readings), so they always go out. The
+    # twin only changes on events - which already broadcast immediately - or
+    # when monitored risk moves, so it's only re-sent when its state differs.
+    last_twin = None
     while True:
         time.sleep(2)
-        broadcast_twin_state()
+        snapshot = twin.get_state_snapshot()
+        if snapshot != last_twin:
+            socketio.emit("state_update", snapshot)
+            last_twin = snapshot
         broadcast_sensor_state()
 
 

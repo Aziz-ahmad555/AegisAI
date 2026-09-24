@@ -2,86 +2,44 @@
 {% block content %}
 <div class="page-header">
     <h2>Command Chat</h2>
-    <div class="desc">Natural-language interface over live system state, coordinating fire, medical and routing specialists.</div>
+    <p>Ask about the live situation. A decision agent consults the fire, medical and routing specialists it needs and answers from their live data. Follow-up questions keep context.</p>
 </div>
 
-<style>
-    .chat-status {
-        display: inline-flex; align-items: center; gap: 7px;
-        padding: 4px 12px; border-radius: 3px; font-size: 0.78em;
-        margin-bottom: 18px; font-family: 'IBM Plex Mono', monospace;
-    }
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; }
-    .status-connected { background: #16281d; color: var(--green); }
-    .status-connected .status-dot { background: var(--green); }
-    .status-offline { background: #2e2308; color: var(--amber); }
-    .status-offline .status-dot { background: var(--amber); }
-
-    #chat-window { height: 400px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 10px; }
-    .msg { max-width: 78%; padding: 10px 14px; border-radius: 4px; font-size: 0.9em; line-height: 1.55; white-space: pre-wrap; }
-    .msg-operator { align-self: flex-end; background: var(--amber); color: #1a1305; }
-    .msg-coordinator { align-self: flex-start; background: var(--panel-raised); color: var(--text); border: 1px solid var(--line); }
-    .msg-meta { font-size: 0.7em; color: var(--text-faint); margin-top: 5px; font-family: 'IBM Plex Mono', monospace; }
-    #chat-input-row { display: flex; gap: 8px; margin-top: 14px; }
-    #chat-input {
-        flex: 1; padding: 10px; background: var(--base); color: var(--text);
-        border: 1px solid var(--line); border-radius: 4px; font-size: 0.92em; font-family: 'IBM Plex Sans', sans-serif;
-    }
-    #chat-input:focus { outline: none; border-color: var(--amber); }
-    #chat-send { padding: 10px 20px; background: var(--amber); color: #1a1305; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
-    #chat-send:hover { background: #f0ad4f; }
-    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 8px; font-weight: 500; }
-    .suggested {
-        display: block; width: 100%; text-align: left; margin: 3px 0; padding: 8px 10px;
-        background: var(--panel-raised); color: var(--text-faint); border: 1px solid var(--line);
-        border-radius: 4px; cursor: pointer; font-size: 0.8em; font-family: 'IBM Plex Sans', sans-serif;
-    }
-    .suggested:hover { color: var(--text); border-color: var(--amber); }
-    .chat-offline-reason { margin: -10px 0 16px 0; font-size: 0.76em; color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; }
-    .msg-agents:empty, .msg-notice:empty, .msg-meta:empty { display: none; }
-    .msg-agents { display: flex; gap: 5px; margin-bottom: 7px; flex-wrap: wrap; }
-    .agent-chip {
-        font-family: 'IBM Plex Mono', monospace; font-size: 0.72em; color: var(--cyan);
-        border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px;
-    }
-    .msg-notice { margin-top: 7px; font-size: 0.78em; color: var(--amber); }
-    .typing { color: var(--text-faint); font-style: italic; }
-    #chat-send:disabled, #chat-input:disabled { opacity: 0.6; cursor: default; }
-    .new-chat {
-        display: block; width: 100%; margin-top: 14px; padding: 8px; background: transparent;
-        color: var(--text-dim); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; font-size: 0.8em;
-    }
-    .new-chat:hover { color: var(--text); border-color: var(--text-dim); }
-</style>
-
-<div class="chat-status {{ 'status-connected' if llm else 'status-offline' }}" title="{{ llm_description }}">
-    <span class="status-dot"></span>
-    {% if llm %}Connected &middot; {{ llm.provider }} &middot; {{ llm.model }}{% else %}Offline &middot; keyword routing{% endif %}
+<div class="row" style="margin-bottom: var(--s4);">
+    {% if llm %}
+    <span class="provider is-on" title="{{ llm_description }}"><span class="conn-dot"></span>{{ llm.provider }} &middot; {{ llm.model }}</span>
+    {% else %}
+    <span class="provider is-off"><span class="conn-dot offline"></span>offline &middot; keyword routing</span>
+    <span class="faint mono" style="font-size: 12px;">{{ llm_description }}</span>
+    {% endif %}
 </div>
-{% if not llm %}<div class="chat-offline-reason">{{ llm_description }}</div>{% endif %}
 
-<div style="display: flex; gap: 18px;">
-    <div class="card" style="flex: 3;">
-        <div id="chat-window"></div>
-        <div id="chat-input-row">
-            <input type="text" id="chat-input" placeholder="Ask about the current situation..." onkeypress="if(event.key==='Enter') sendMessage()">
-            <button id="chat-send" onclick="sendMessage()">Send</button>
+<div class="grid grid-main-side">
+    <section class="card" aria-label="Conversation">
+        <div class="chat-window" id="chat-window" aria-live="polite"></div>
+        <form class="chat-input" id="chat-form">
+            <label class="sr-only" for="chat-input">Question</label>
+            <input class="field" type="text" id="chat-input" maxlength="1000" autocomplete="off" placeholder="Ask about the current situation&hellip;">
+            <button class="btn btn-primary" id="chat-send" type="submit">Send</button>
+        </form>
+    </section>
+
+    <section class="card card-tight" aria-labelledby="suggest-title">
+        <h3 class="card-title" id="suggest-title">Suggested</h3>
+        <div class="btn-list" id="suggestions">
+            <button class="btn btn-sm" type="button">Is there a fire right now?</button>
+            <button class="btn btn-sm" type="button">How many people need rescue?</button>
+            <button class="btn btn-sm" type="button">Can people evacuate safely?</button>
+            <button class="btn btn-sm" type="button">What is the full situation right now?</button>
         </div>
-    </div>
-
-    <div class="card" style="flex: 1;">
-        <div class="panel-label">Suggested</div>
-        <button class="suggested" onclick="askSuggested('Is there a fire right now?')">Is there a fire right now?</button>
-        <button class="suggested" onclick="askSuggested('How many people need rescue?')">How many people need rescue?</button>
-        <button class="suggested" onclick="askSuggested('Can people evacuate safely?')">Can people evacuate safely?</button>
-        <button class="suggested" onclick="askSuggested('What is the full situation right now?')">Full situation summary</button>
-        <button class="new-chat" onclick="newConversation()">New conversation</button>
-    </div>
+        <button class="btn btn-ghost btn-block" id="new-chat" type="button" style="margin-top: var(--s4);">New conversation</button>
+    </section>
 </div>
 
 <script>
-    // Answers stream over the shared Socket.IO connection: text arrives in
-    // chunks, plus which specialist agents were consulted and any notices.
+(function () {
+    // Answers stream over the shared Socket.IO connection as server-rendered,
+    // sanitized HTML, plus which specialist agents were consulted and notices.
     var socket = window.aegisSocket;
     var win = document.getElementById("chat-window");
     var input = document.getElementById("chat-input");
@@ -96,9 +54,7 @@
         return msg;
     }
 
-    function appendMessage(text, sender) {
-        bubble(sender).textContent = text;
-    }
+    function appendMessage(text, sender) { bubble(sender).textContent = text; }
 
     function startAnswer() {
         var msg = bubble("coordinator");
@@ -127,7 +83,7 @@
             if (c.agents.indexOf(ev.agent) === -1) {
                 c.agents.push(ev.agent);
                 var chip = document.createElement("span");
-                chip.className = "agent-chip";
+                chip.className = "chip";
                 chip.textContent = ev.agent + " agent";
                 c.el.querySelector(".msg-agents").appendChild(chip);
             }
@@ -137,6 +93,7 @@
             c.el.querySelector(".msg-meta").textContent = ev.mode === "llm" ? (ev.provider + " · " + ev.model) : "offline keyword routing";
         } else if (ev.type === "error") {
             c.body.textContent = ev.text;
+            c.started = true;
         } else if (ev.type === "done") {
             if (!c.started) c.body.textContent = "(no answer)";
             current = null;
@@ -153,8 +110,8 @@
         }
     });
 
-    function sendMessage() {
-        var question = input.value.trim();
+    function send(question) {
+        question = (question || "").trim();
         if (!question || current) return;
         appendMessage(question, "operator");
         input.value = "";
@@ -163,18 +120,16 @@
         socket.emit("chat_ask", { question: question });
     }
 
-    function askSuggested(text) {
-        input.value = text;
-        sendMessage();
-    }
-
-    function newConversation() {
+    document.getElementById("chat-form").addEventListener("submit", function (e) { e.preventDefault(); send(input.value); });
+    document.querySelectorAll("#suggestions .btn").forEach(function (b) { b.onclick = function () { send(b.textContent); }; });
+    document.getElementById("new-chat").onclick = function () {
         fetch("/api/chat/reset", { method: "POST" }).then(function () {
             win.innerHTML = "";
             appendMessage("New conversation. Earlier questions are forgotten.", "coordinator");
         });
-    }
+    };
 
-    appendMessage("Ready. Ask about active incidents, evacuation status, or medical needs. Follow-up questions keep context.", "coordinator");
+    appendMessage("Ready. Ask about active incidents, evacuation status, or medical needs.", "coordinator");
+})();
 </script>
 {% endblock %}

@@ -175,11 +175,12 @@ def verify_csrf():
 
 CONTENT_SECURITY_POLICY = "; ".join([
     "default-src 'self'",
-    # Inline <script>/<style> blocks are used throughout the templates; the
-    # external hosts are the charting / 3D libraries and Google Fonts.
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    # Every script, stylesheet and font is self-hosted (static/vendor, static/
+    # fonts): no third-party origins at all. 'unsafe-inline' remains for the
+    # templates' inline page scripts and style attributes.
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' data: blob:",
     "connect-src 'self' ws: wss:",
     "frame-ancestors 'none'",

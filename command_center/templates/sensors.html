@@ -2,142 +2,119 @@
 {% block content %}
 <div class="page-header">
     <h2>Sensor Fusion</h2>
-    <div class="desc">Simulated telemetry combined with anomaly detection and trend forecasting into a single risk assessment.</div>
+    <p>Simulated temperature, smoke and gas telemetry fused with live camera fire/smoke confidence into one risk score, with anomaly detection and trend forecasting.</p>
 </div>
 
-<style>
-    .sensor-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1px;
-        background: var(--line);
-        border: 1px solid var(--line);
-        border-radius: 4px;
-        overflow: hidden;
-        margin-bottom: 16px;
-    }
-    .sensor-box { background: var(--panel); text-align: center; padding: 18px; }
-    .sensor-box .label { color: var(--text-faint); font-size: 0.78em; margin-bottom: 8px; }
-    .sensor-box .value { font-family: 'IBM Plex Mono', monospace; font-size: 1.7em; font-weight: 600; color: var(--text); }
-    .risk-section { display: flex; gap: 16px; margin-bottom: 16px; align-items: stretch; }
-    .risk-box { flex: 1; text-align: center; }
-    .risk-display { font-family: 'IBM Plex Mono', monospace; font-size: 2.2em; font-weight: 600; }
-    .risk-normal { color: var(--green); }
-    .risk-elevated { color: var(--amber); }
-    .risk-high { color: #d97a2e; }
-    .risk-critical { color: var(--red); }
-    .trend-box { flex: 1; }
-    .trend-badge {
-        display: inline-block; padding: 3px 10px; border-radius: 3px;
-        font-size: 0.85em; font-weight: 600; font-family: 'IBM Plex Mono', monospace;
-    }
-    .trend-STABLE { background: #16281d; color: var(--green); }
-    .trend-RISING { background: #2e2308; color: var(--amber); }
-    .trend-RISING_FAST { background: #2e1414; color: var(--red); }
-    .trend-FALLING, .trend-FALLING_FAST { background: #0f2530; color: var(--cyan); }
-    .anomaly-banner {
-        background: #2e1414; border: 1px solid var(--red); color: #ff8f8f;
-        padding: 10px 14px; border-radius: 4px; margin-bottom: 16px; font-size: 0.88em; display: none;
-    }
-    .trigger-btn {
-        padding: 9px 18px; background: transparent; color: var(--red); border: 1px solid var(--red);
-        border-radius: 4px; cursor: pointer; font-size: 0.85em; margin-top: 12px; font-family: 'IBM Plex Sans', sans-serif;
-    }
-    .trigger-btn:hover { background: var(--red); color: #1a0505; }
-    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 4px; font-weight: 500; }
-    #chart-container { height: 200px; }
-</style>
-
-<div class="sensor-grid">
-    <div class="sensor-box"><div class="label">TEMPERATURE</div><div class="value" id="temp-value">--</div></div>
-    <div class="sensor-box"><div class="label">SMOKE LEVEL</div><div class="value" id="smoke-value">--</div></div>
-    <div class="sensor-box"><div class="label">GAS LEVEL</div><div class="value" id="gas-value">--</div></div>
+<div id="anomaly-banner" class="notice notice-warn" hidden style="margin-bottom: var(--s4);">
+    <strong>Anomaly detected</strong> - readings deviate significantly from the recent baseline.
 </div>
 
-<div id="anomaly-banner" class="anomaly-banner">Anomaly detected - readings deviate significantly from recent baseline.</div>
+<div class="grid grid-main-side">
+    <div class="stack">
+        <section class="card card-tight" aria-labelledby="readings-title">
+            <h3 class="card-title" id="readings-title">Live readings <span class="hint">monitored zone: {{ sensor_zone }}</span></h3>
+            <div class="stats">
+                <div class="stat"><div class="stat-label">Temperature</div><div class="stat-value" id="temp-value">&ndash;</div><div class="stat-sub">&deg;C</div></div>
+                <div class="stat"><div class="stat-label">Smoke</div><div class="stat-value" id="smoke-value">&ndash;</div><div class="stat-sub">level</div></div>
+                <div class="stat"><div class="stat-label">Gas</div><div class="stat-value" id="gas-value">&ndash;</div><div class="stat-sub">level</div></div>
+                <div class="stat"><div class="stat-label">Camera fire / smoke</div><div class="stat-value" id="camera-value">&ndash;</div><div class="stat-sub">confidence (Live Vision)</div></div>
+            </div>
+        </section>
 
-<div class="risk-section">
-    <div class="card risk-box">
-        <div class="panel-label">Fused risk score</div>
-        <div id="risk-value" class="risk-display risk-normal">0.0</div>
-        <div id="risk-level" style="color: var(--text-dim); font-size: 0.85em;">NORMAL</div>
+        <section class="card" aria-labelledby="history-title">
+            <h3 class="card-title" id="history-title">Risk score history <span class="hint">last 30 readings &middot; dashed lines mark the level thresholds</span></h3>
+            <div id="chart-container"><canvas id="risk-chart" aria-label="Fused risk score over time" role="img"></canvas></div>
+        </section>
     </div>
-    <div class="card trend-box">
-        <div class="panel-label">Trend forecast</div>
-        <span id="trend-badge" class="trend-badge trend-STABLE">STABLE</span>
-        <div style="margin-top:10px; color:var(--text-faint); font-size:0.82em;">Predicted next: <span id="predicted-next" class="mono">--</span></div>
-        <button class="trigger-btn" onclick="triggerEvent()">Simulate event</button>
+
+    <div class="stack">
+        <section class="card card-tight" aria-labelledby="risk-title">
+            <h3 class="card-title" id="risk-title">Fused risk</h3>
+            <div class="row"><span class="risk-figure lvl-NORMAL" id="risk-value">0.0</span><span class="badge badge-NORMAL" id="risk-level">NORMAL</span></div>
+            <p class="faint" style="font-size: 13px; margin: var(--s3) 0 0;">Sensors alone top out at HIGH; CRITICAL needs the camera to agree.</p>
+        </section>
+
+        <section class="card card-tight" aria-labelledby="trend-title">
+            <h3 class="card-title" id="trend-title">Trend forecast</h3>
+            <div class="row"><span class="badge badge-STABLE" id="trend-badge">STABLE</span><span class="dim" style="font-size: 14px;">next <span class="mono" id="predicted-next">&ndash;</span></span></div>
+        </section>
+
+        <section class="card card-tight">
+            <h3 class="card-title">Simulation</h3>
+            <button class="btn btn-block" id="trigger-btn">Simulate sensor event</button>
+            <p class="faint" style="font-size: 13px; margin: var(--s2) 0 0;">Ramps temperature, smoke and gas up for a few seconds, then back to baseline.</p>
+        </section>
     </div>
 </div>
 
-<div class="card">
-    <div class="panel-label">Risk score history</div>
-    <div id="chart-container">
-        <canvas id="risk-chart"></canvas>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/chart-4.4.0.umd.min.js') }}"></script>
 <script>
+(function () {
     var socket = window.aegisSocket;
+    var css = getComputedStyle(document.documentElement);
+    function token(name) { return css.getPropertyValue(name).trim(); }
 
-    var ctx = document.getElementById("risk-chart").getContext("2d");
-    var riskChart = new Chart(ctx, {
+    var thresholds = [{ y: 20, c: token("--elevated") }, { y: 45, c: token("--high") }, { y: 70, c: token("--danger") }];
+    var thresholdLines = {
+        id: "thresholds",
+        afterDatasetsDraw: function (chart) {
+            var ctx = chart.ctx, area = chart.chartArea, y = chart.scales.y;
+            ctx.save();
+            ctx.setLineDash([4, 4]);
+            ctx.lineWidth = 1;
+            thresholds.forEach(function (t) {
+                ctx.strokeStyle = t.c;
+                ctx.globalAlpha = 0.55;
+                ctx.beginPath();
+                ctx.moveTo(area.left, y.getPixelForValue(t.y));
+                ctx.lineTo(area.right, y.getPixelForValue(t.y));
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+    };
+
+    var chart = new Chart(document.getElementById("risk-chart").getContext("2d"), {
         type: "line",
-        data: {
-            labels: [],
-            datasets: [{
-                label: "Risk Score",
-                data: [],
-                borderColor: "#e8a33d",
-                backgroundColor: "rgba(232, 163, 61, 0.08)",
-                fill: true,
-                tension: 0.3,
-                pointRadius: 0,
-            }]
-        },
+        data: { labels: [], datasets: [{ label: "Risk score", data: [], borderColor: token("--accent"), backgroundColor: "rgba(232, 163, 61, 0.10)", fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false, animation: false,
             scales: {
                 x: { display: false },
-                y: { min: 0, max: 100, ticks: { color: "#8a8f96" }, grid: { color: "#262b31" } }
+                y: { min: 0, max: 100, ticks: { color: token("--text-dim"), font: { family: "IBM Plex Mono", size: 12 } }, grid: { color: token("--line") } }
             },
             plugins: { legend: { display: false } }
-        }
+        },
+        plugins: [thresholdLines]
     });
 
-    function riskClass(score) {
-        if (score < 20) return "risk-normal";
-        if (score < 45) return "risk-elevated";
-        if (score < 70) return "risk-high";
-        return "risk-critical";
-    }
+    document.getElementById("trigger-btn").onclick = function () { socket.emit("trigger_sensor_event"); };
 
-    function triggerEvent() {
-        socket.emit("trigger_sensor_event");
-    }
+    socket.on("sensor_update", function (d) {
+        document.getElementById("temp-value").textContent = d.reading.temperature.toFixed(1);
+        document.getElementById("smoke-value").textContent = d.reading.smoke_level.toFixed(1);
+        document.getElementById("gas-value").textContent = d.reading.gas_level.toFixed(1);
+        var cam = d.camera || { fire: 0, smoke: 0 };
+        document.getElementById("camera-value").textContent = cam.fire.toFixed(2) + " / " + cam.smoke.toFixed(2);
 
-    socket.on("sensor_update", function(data) {
-        document.getElementById("temp-value").innerText = data.reading.temperature + "C";
-        document.getElementById("smoke-value").innerText = data.reading.smoke_level;
-        document.getElementById("gas-value").innerText = data.reading.gas_level;
+        var val = document.getElementById("risk-value");
+        val.textContent = d.risk_score.toFixed(1);
+        val.className = "risk-figure lvl-" + d.risk_level;
+        var lvl = document.getElementById("risk-level");
+        lvl.textContent = d.risk_level;
+        lvl.className = "badge badge-" + d.risk_level;
 
-        var riskEl = document.getElementById("risk-value");
-        riskEl.innerText = data.risk_score.toFixed(1);
-        riskEl.className = "risk-display " + riskClass(data.risk_score);
-        document.getElementById("risk-level").innerText = data.risk_level;
+        var trend = document.getElementById("trend-badge");
+        trend.textContent = d.trend.trend.replace("_", " ");
+        trend.className = "badge badge-" + d.trend.trend;
+        document.getElementById("predicted-next").textContent = d.trend.predicted_next == null ? "–" : d.trend.predicted_next;
 
-        var trendBadge = document.getElementById("trend-badge");
-        trendBadge.innerText = data.trend.trend;
-        trendBadge.className = "trend-badge trend-" + data.trend.trend;
-        document.getElementById("predicted-next").innerText = data.trend.predicted_next;
+        document.getElementById("anomaly-banner").hidden = !d.anomaly;
 
-        document.getElementById("anomaly-banner").style.display = data.anomaly ? "block" : "none";
-
-        riskChart.data.labels = data.risk_history.map(function(_, i) { return i; });
-        riskChart.data.datasets[0].data = data.risk_history;
-        riskChart.update("none");
+        chart.data.labels = d.risk_history.map(function (_, i) { return i; });
+        chart.data.datasets[0].data = d.risk_history;
+        chart.update("none");
     });
+})();
 </script>
 {% endblock %}

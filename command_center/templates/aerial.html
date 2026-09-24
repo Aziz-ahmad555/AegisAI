@@ -2,60 +2,37 @@
 {% block content %}
 <div class="page-header">
     <h2>Aerial Search</h2>
-    <div class="desc">Pose classification from aerial imagery, distinguishing distress-relevant posture from active movement.</div>
+    <p>Pose classification on aerial imagery - separating people lying down or seated (possibly injured or stranded) from people moving.</p>
 </div>
 
-<style>
-    .metrics-row { display: flex; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-bottom: 18px; }
-    .metric-box { flex: 1; text-align: center; background: var(--panel); padding: 16px; }
-    .metric-box .val { font-family: 'IBM Plex Mono', monospace; font-size: 1.6em; font-weight: 600; color: var(--amber); }
-    .metric-box .lbl { color: var(--text-faint); font-size: 0.76em; margin-top: 4px; }
-    .class-tags { text-align: center; padding-bottom: 16px; }
-    .class-tag {
-        display: inline-block; padding: 3px 10px; border-radius: 3px; font-size: 0.76em;
-        margin: 2px; background: var(--panel-raised); color: var(--text-dim);
-        font-family: 'IBM Plex Mono', monospace; border: 1px solid var(--line);
-    }
-    .gallery-grid {
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-        gap: 14px; margin-top: 4px;
-    }
-    .gallery-item { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
-    .gallery-item img { width: 100%; display: block; }
-    .gallery-caption { padding: 10px 12px; font-size: 0.8em; color: var(--text-dim); }
-    .note-box {
-        background: var(--panel); border: 1px solid var(--line); border-left: 2px solid var(--cyan);
-        color: var(--text-dim); padding: 12px 16px; border-radius: 4px; margin-top: 18px; font-size: 0.86em; line-height: 1.6;
-    }
-</style>
-
-<div class="card" style="margin-bottom: 16px; padding: 0;">
-    <div class="metrics-row" style="border: none; margin-bottom: 0;">
-        <div class="metric-box"><div class="val">0.572</div><div class="lbl">MAP50</div></div>
-        <div class="metric-box"><div class="val">0.784</div><div class="lbl">PRECISION</div></div>
-        <div class="metric-box"><div class="val">0.512</div><div class="lbl">RECALL</div></div>
-        <div class="metric-box"><div class="val">1,980</div><div class="lbl">TRAINING IMAGES</div></div>
+<section class="card card-tight" aria-labelledby="model-title">
+    <h3 class="card-title" id="model-title">Model <span class="hint">YOLOv8n trained on the SARD search-and-rescue dataset</span></h3>
+    <div class="stats">
+        <div class="stat"><div class="stat-label">mAP50</div><div class="stat-value">0.572</div></div>
+        <div class="stat"><div class="stat-label">Precision</div><div class="stat-value">0.784</div></div>
+        <div class="stat"><div class="stat-label">Recall</div><div class="stat-value">0.512</div><div class="stat-sub">misses ~half - verify manually</div></div>
+        <div class="stat"><div class="stat-label">Training images</div><div class="stat-value">1,980</div></div>
     </div>
-    <div class="class-tags">
-        <span class="class-tag">running</span>
-        <span class="class-tag">walking</span>
-        <span class="class-tag">laying_down</span>
-        <span class="class-tag">seated</span>
-        <span class="class-tag">stands</span>
-        <span class="class-tag">not_defined</span>
+    <div class="row" style="margin-top: var(--s3);">
+        <span class="faint" style="font-size: 13px;">Classes</span>
+        <span class="chip">laying_down</span><span class="chip">seated</span><span class="chip">stands</span>
+        <span class="chip">walking</span><span class="chip">running</span><span class="chip">not_defined</span>
     </div>
-</div>
+</section>
 
-<div class="gallery-grid">
-    {% for sample in samples %}
-    <div class="gallery-item">
-        <img src="{{ url_for('static', filename='aerial_results/' + sample.file) }}" alt="{{ sample.caption }}">
-        <div class="gallery-caption">{{ sample.caption }}</div>
+<section class="mt" aria-labelledby="gallery-title">
+    <h3 class="card-title" id="gallery-title" style="margin-top: var(--s5);">Held-out test results</h3>
+    <div class="gallery">
+        {% for sample in samples %}
+        <figure>
+            <img src="{{ url_for('static', filename='aerial_results/' + sample.file) }}" alt="{{ sample.caption }}" loading="lazy">
+            <figcaption>{{ sample.caption }}</figcaption>
+        </figure>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
+</section>
 
-<div class="note-box">
-    Inference results from held-out test images. No physical drone hardware was used - these are static aerial photographs from the SARD dataset. Distinguishing laying_down and seated poses from active movement supports identifying potentially injured or stranded individuals in disaster imagery.
+<div class="notice notice-info mt">
+    Static aerial photographs from the SARD dataset - no drone hardware was used. With recall at 0.512, treat detections as leads for a human reviewer, not as a complete count.
 </div>
 {% endblock %}

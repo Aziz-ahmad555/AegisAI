@@ -2,124 +2,96 @@
 {% block content %}
 <div class="page-header">
     <h2>Report Analyzer</h2>
-    <div class="desc">Extracts event type, severity, location and casualty count from free-text incident reports.</div>
+    <p>Extracts event type, severity, location and casualty count from free-text reports. Fire reports that name a building zone propose a fire declaration for you to confirm.</p>
 </div>
 
-<style>
-    .nlp-layout { display: flex; gap: 18px; }
-    #input-panel { flex: 1; }
-    #result-panel { flex: 1; }
-    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 8px; font-weight: 500; }
-    textarea {
-        width: 100%; height: 150px; padding: 12px;
-        background: var(--base); color: var(--text); border: 1px solid var(--line);
-        border-radius: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.92em;
-        resize: vertical; box-sizing: border-box;
-    }
-    textarea:focus { outline: none; border-color: var(--amber); }
-    .analyze-btn {
-        margin-top: 10px; padding: 9px 18px; background: var(--amber); color: #1a1305;
-        border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: 600;
-    }
-    .analyze-btn:hover { background: #f0ad4f; }
-    .examples { margin-top: 18px; }
-    .examples-label { color: var(--text-faint); font-size: 0.78em; margin-bottom: 6px; }
-    .example-btn {
-        display: block; width: 100%; text-align: left; margin: 3px 0; padding: 8px 10px;
-        background: var(--panel-raised); color: var(--text-faint); border: 1px solid var(--line);
-        border-radius: 4px; cursor: pointer; font-size: 0.78em; font-family: 'IBM Plex Sans', sans-serif;
-    }
-    .example-btn:hover { color: var(--text); border-color: var(--amber); }
-    .result-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
-    .result-row:last-child { border-bottom: none; }
-    .result-label { color: var(--text-faint); font-size: 0.82em; }
-    .result-value { color: var(--text); font-weight: 500; text-align: right; max-width: 60%; font-size: 0.92em; }
-    .tag {
-        display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.72em;
-        margin-left: 4px; background: #0f2530; color: var(--cyan); font-family: 'IBM Plex Mono', monospace;
-    }
-    .severity-CRITICAL { color: var(--red); }
-    .severity-HIGH { color: #d97a2e; }
-    .severity-MODERATE { color: var(--amber); }
-    .severity-LOW { color: var(--green); }
-    .placeholder-text { color: var(--text-faint); font-size: 0.88em; }
-</style>
-
-<div class="nlp-layout">
-    <div id="input-panel" class="card">
-        <div class="panel-label">Incident report</div>
-        <textarea id="report-text" placeholder="Type or paste an emergency report..."></textarea>
-        <button class="analyze-btn" onclick="analyzeReport()">Analyze</button>
-
-        <div class="examples">
-            <div class="examples-label">SAMPLE REPORTS</div>
-            <button class="example-btn" onclick="useExample(0)">"Smoke coming from the second floor near the laboratory in Building 4. Three people trapped near Gate 4."</button>
-            <button class="example-btn" onclick="useExample(1)">"Small fire in the kitchen, nothing major, just want someone to check it out."</button>
-            <button class="example-btn" onclick="useExample(2)">"Building has collapsed, people trapped under debris near Main Street."</button>
-            <button class="example-btn" onclick="useExample(3)">"Someone collapsed and is unconscious near the cafeteria entrance."</button>
+<div class="grid grid-2">
+    <section class="card" aria-labelledby="input-title">
+        <h3 class="card-title" id="input-title">Incident report <span class="hint" id="char-count">0 / 2000</span></h3>
+        <label class="sr-only" for="report-text">Incident report text</label>
+        <textarea class="field" id="report-text" maxlength="2000" placeholder="Type or paste an emergency report, e.g. &quot;Fire in Room 202, two people trapped&quot;"></textarea>
+        <div class="row" style="margin-top: var(--s3);">
+            <button class="btn btn-primary" id="analyze-btn">Analyze report</button>
+            <span class="faint" style="font-size: 13px;">Ctrl+Enter</span>
         </div>
-    </div>
 
-    <div id="result-panel" class="card">
-        <div class="panel-label">Structured output</div>
-        <div id="results">
-            <div class="placeholder-text">Enter a report and analyze to see the breakdown.</div>
-        </div>
-    </div>
+        <h3 class="card-title" style="margin-top: var(--s5);">Sample reports</h3>
+        <div class="btn-list" id="examples"></div>
+    </section>
+
+    <section class="card" aria-labelledby="output-title" aria-live="polite">
+        <h3 class="card-title" id="output-title">Structured output</h3>
+        <div id="results"><div class="empty">Analyze a report to see its breakdown here.</div></div>
+    </section>
 </div>
 
 <script>
+(function () {
+    var esc = window.aegisEscape;
     var examples = [
+        "Fire in Room 202, two people are trapped inside.",
         "There is smoke coming from the second floor near the laboratory in Building 4. Three people are trapped near Gate 4.",
         "I see a small fire in the kitchen, nothing major, just want someone to check it out.",
-        "The building has collapsed and there are people trapped under the debris near Main Street.",
         "Someone collapsed and is unconscious near the cafeteria entrance."
     ];
+    var box = document.getElementById("report-text");
+    var btn = document.getElementById("analyze-btn");
+    var results = document.getElementById("results");
 
-    function useExample(i) {
-        document.getElementById("report-text").value = examples[i];
-        analyzeReport();
-    }
+    var list = document.getElementById("examples");
+    examples.forEach(function (text) {
+        var b = document.createElement("button");
+        b.className = "btn btn-sm";
+        b.textContent = text;
+        b.onclick = function () { box.value = text; count(); analyze(); };
+        list.appendChild(b);
+    });
 
-    function analyzeReport() {
-        var text = document.getElementById("report-text").value;
-        if (!text.trim()) return;
+    function count() { document.getElementById("char-count").textContent = box.value.length + " / 2000"; }
+    box.addEventListener("input", count);
+    box.addEventListener("keydown", function (e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze(); });
+    btn.onclick = analyze;
 
+    function analyze() {
+        var text = box.value;
+        if (!text.trim()) { box.focus(); return; }
+        btn.disabled = true;
+        results.innerHTML = '<div class="skeleton">Analyzing&hellip;</div>';
         fetch("/api/analyze_report", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: text })
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text })
         })
-        .then(function(res) { return res.json(); })
-        .then(function(data) { renderResults(data); })
-        .catch(function() {
-            document.getElementById("results").innerHTML = '<div class="placeholder-text">Error analyzing report.</div>';
-        });
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+            if (!res.ok) throw new Error(res.d.error || "The server rejected the report.");
+            render(res.d);
+        })
+        .catch(function (e) {
+            results.innerHTML = '<div class="notice notice-warn">' + esc(e.message || "Could not analyze the report.") + '</div>';
+        })
+        .finally(function () { btn.disabled = false; });
     }
 
-    function renderResults(data) {
-        var esc = window.aegisEscape;
-        var eventTags = data.event_types.map(function(e) {
-            return '<span class="tag">' + esc(e) + '</span>';
-        }).join("");
+    function render(d) {
+        var events = d.event_types.map(function (e) {
+            var cls = e === "FIRE" ? "badge-CRITICAL" : e === "UNKNOWN" ? "badge-neutral" : "badge-info";
+            return '<span class="badge ' + cls + '">' + esc(e) + '</span>';
+        }).join(" ");
+        var zones = d.zones && d.zones.length ? d.zones.map(function (z) { return '<span class="chip">' + esc(z) + '</span>'; }).join(" ")
+                                             : '<span class="faint">no matching building zone</span>';
+        var proposal = d.proposals && d.proposals.length
+            ? d.proposals.map(function (p) { return esc(p.reason); }).join("<br>") +
+              '<div class="faint" style="font-size: 13px; margin-top: 4px;">Waiting for your confirmation (panel bottom-right).</div>'
+            : '<span class="faint">none - recorded on the incident timeline</span>';
 
-        var locations = data.locations.length > 0 ? esc(data.locations.join(", ")) : "None detected";
-        var peopleCount = data.people_count !== null ? esc(data.people_count) : "Not specified";
-        var zones = data.zones && data.zones.length ? esc(data.zones.join(", ")) : "No matching building zone";
-        var proposals = data.proposals && data.proposals.length
-            ? data.proposals.map(function(p) { return esc(p.reason); }).join("<br>") +
-              '<div style="color: var(--text-faint); font-size: 0.85em; margin-top: 4px;">Awaiting operator confirmation (bottom-right).</div>'
-            : "None - report recorded on the incident timeline";
-
-        var html = "";
-        html += '<div class="result-row"><div class="result-label">Event type</div><div class="result-value">' + eventTags + '</div></div>';
-        html += '<div class="result-row"><div class="result-label">Severity</div><div class="result-value severity-' + esc(data.severity) + '">' + esc(data.severity) + '</div></div>';
-        html += '<div class="result-row"><div class="result-label">Locations</div><div class="result-value">' + locations + '</div></div>';
-        html += '<div class="result-row"><div class="result-label">People count</div><div class="result-value">' + peopleCount + '</div></div>';
-        html += '<div class="result-row"><div class="result-label">Building zone</div><div class="result-value">' + zones + '</div></div>';
-        html += '<div class="result-row"><div class="result-label">Proposed action</div><div class="result-value">' + proposals + '</div></div>';
-
-        document.getElementById("results").innerHTML = html;
+        results.innerHTML = '<div class="kv">' +
+            '<div class="k">Event type</div><div class="v">' + events + '</div>' +
+            '<div class="k">Severity</div><div class="v"><span class="badge badge-' + esc(d.severity) + '">' + esc(d.severity) + '</span></div>' +
+            '<div class="k">People</div><div class="v">' + (d.people_count !== null ? esc(d.people_count) : '<span class="faint">not specified</span>') + '</div>' +
+            '<div class="k">Locations</div><div class="v">' + (d.locations.length ? esc(d.locations.join(", ")) : '<span class="faint">none detected</span>') + '</div>' +
+            '<div class="k">Building zone</div><div class="v">' + zones + '</div>' +
+            '<div class="k">Proposed action</div><div class="v">' + proposal + '</div>' +
+            '</div>';
     }
+})();
 </script>
 {% endblock %}

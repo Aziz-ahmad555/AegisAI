@@ -2,83 +2,69 @@
 {% block content %}
 <div class="page-header">
     <h2>Live Vision</h2>
-    <div class="desc">Real-time object detection, tracking, and fire/smoke recognition streamed directly from camera.</div>
+    <p>Real-time detection from the local camera. In fire/smoke mode, detections feed the fused sensor risk for the monitored zone.</p>
 </div>
 
-<style>
-    .vision-layout { display: flex; gap: 18px; }
-    #video-panel { flex: 3; }
-    #video-panel img { width: 100%; border-radius: 4px; background: #000; display: block; }
-    #controls-panel { flex: 1; }
-    .panel-label { color: var(--text-dim); font-size: 0.82em; margin-bottom: 8px; font-weight: 500; }
-    .mode-btn {
-        display: block; width: 100%; margin: 4px 0; padding: 10px;
-        background: var(--panel-raised); color: var(--text); border: 1px solid var(--line);
-        border-radius: 4px; cursor: pointer; font-size: 0.88em; text-align: left;
-        font-family: 'IBM Plex Sans', sans-serif;
-    }
-    .mode-btn:hover { border-color: var(--amber); }
-    .mode-btn.active { background: var(--amber); border-color: var(--amber); color: #1a1305; font-weight: 600; }
-    .mode-desc { color: var(--text-faint); font-size: 0.8em; margin-top: 14px; line-height: 1.55; }
-    .status-line {
-        margin-top: 14px; padding: 10px; background: var(--base); border: 1px solid var(--line);
-        border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.8em; color: var(--cyan);
-    }
-</style>
+<div class="grid grid-main-side">
+    <section class="card card-tight" aria-labelledby="feed-title">
+        <h3 class="card-title" id="feed-title">Camera feed <span class="hint">zone: {{ camera_zone }}</span></h3>
+        <img class="video-frame" id="video-stream" src="{{ url_for('video_feed') }}" alt="Live camera feed with detection overlays">
+    </section>
 
-<div class="vision-layout">
-    <div id="video-panel" class="card">
-        <img id="video-stream" src="{{ url_for('video_feed') }}" alt="Live vision feed">
-    </div>
-
-    <div id="controls-panel" class="card">
-        <div class="panel-label">Detection mode</div>
-        <button class="mode-btn active" data-mode="tracking" onclick="setMode('tracking')">Object detection &amp; tracking</button>
-        <button class="mode-btn" data-mode="fire_smoke" onclick="setMode('fire_smoke')">Fire / smoke detection</button>
-        <button class="mode-btn" data-mode="fall_detection" onclick="setMode('fall_detection')">Fall detection (pose)</button>
-
-        <div class="mode-desc" id="mode-description">
-            YOLOv8n with multi-object tracking - assigns persistent IDs to detected objects across frames.
-        </div>
-
-        <div class="status-line" id="status-line">Loading...</div>
+    <div class="stack">
+        <section class="card card-tight" aria-labelledby="mode-title">
+            <h3 class="card-title" id="mode-title">Detection mode</h3>
+            <div class="btn-list mode-list" role="radiogroup" aria-label="Detection mode">
+                <button class="btn active" data-mode="tracking" role="radio" aria-checked="true">Object detection &amp; tracking</button>
+                <button class="btn" data-mode="fire_smoke" role="radio" aria-checked="false">Fire / smoke detection</button>
+                <button class="btn" data-mode="fall_detection" role="radio" aria-checked="false">Fall detection (pose)</button>
+            </div>
+            <p class="dim" id="mode-description" style="font-size: 14px; margin: var(--s3) 0 0;"></p>
+            <div class="status-line" id="status-line" aria-live="polite">Starting camera&hellip;</div>
+        </section>
     </div>
 </div>
 
 <script>
+(function () {
     var descriptions = {
-        "tracking": "YOLOv8n with multi-object tracking - assigns persistent IDs to detected objects across frames.",
-        "fire_smoke": "Custom-trained YOLOv8n model (mAP50 0.576) detecting fire and smoke in real time.",
-        "fall_detection": "YOLOv8n-pose keypoint detection with confidence-filtered geometry to flag possible falls."
+        tracking: "YOLOv8n with multi-object tracking - persistent IDs for detected objects across frames.",
+        fire_smoke: "Custom-trained YOLOv8n (mAP50 0.576) detecting fire and smoke; confidence feeds sensor fusion.",
+        fall_detection: "YOLOv8n-pose keypoints with confidence-filtered geometry to flag possible falls."
     };
+    var buttons = document.querySelectorAll(".mode-list .btn");
 
-    function setMode(mode) {
-        fetch("/api/vision_mode", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: mode })
-        }).then(function() {
-            document.querySelectorAll(".mode-btn").forEach(function(btn) {
-                btn.classList.toggle("active", btn.dataset.mode === mode);
-            });
-            document.getElementById("mode-description").innerText = descriptions[mode];
+    function show(mode) {
+        buttons.forEach(function (b) {
+            var on = b.dataset.mode === mode;
+            b.classList.toggle("active", on);
+            b.setAttribute("aria-checked", on ? "true" : "false");
+        });
+        document.getElementById("mode-description").textContent = descriptions[mode];
+    }
+
+    buttons.forEach(function (b) {
+        b.onclick = function () {
+            fetch("/api/vision_mode", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode: b.dataset.mode })
+            }).then(function (r) { if (r.ok) show(b.dataset.mode); });
+        };
+    });
+
+    function poll() {
+        fetch("/api/vision_info").then(function (r) { return r.json(); }).then(function (d) {
+            var line = d.detail || "Running";
+            if (d.fps) line += "  ·  " + d.fps.toFixed(1) + " fps  ·  " + d.latency_ms + " ms";
+            if (d.mode && descriptions[d.mode]) show(d.mode);      // reflect the camera's actual mode
+            document.getElementById("status-line").textContent = line;
+        }).catch(function () {
+            document.getElementById("status-line").textContent = "Status unavailable - is the server running?";
         });
     }
-
-    function pollStatus() {
-        fetch("/api/vision_info")
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                var line = data.detail || "Running";
-                if (data.fps) {
-                    line += "  ·  " + data.fps.toFixed(1) + " fps  ·  " + data.latency_ms + " ms";
-                }
-                document.getElementById("status-line").innerText = line;
-            })
-            .catch(function() {});
-    }
-
-    setInterval(pollStatus, 1000);
-    pollStatus();
+    show("tracking");
+    setInterval(poll, 1000);
+    poll();
+})();
 </script>
 {% endblock %}

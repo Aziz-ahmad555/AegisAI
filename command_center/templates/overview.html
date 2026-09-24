@@ -1,341 +1,250 @@
 {% extends "base.html" %}
 {% block content %}
-<style>
-    #hero3d {
-        width: 100%;
-        height: 560px;
-        border-radius: 4px;
-        border: 1px solid var(--line);
-        background: radial-gradient(ellipse at center, #10141a 0%, #0b0d10 70%);
-        position: relative;
-        overflow: hidden;
-        margin-bottom: 30px;
-        cursor: grab;
-    }
-    #hero3d:active { cursor: grabbing; }
-    #hero3d canvas { display: block; }
-    #hero-caption {
-        position: absolute;
-        top: 22px;
-        left: 26px;
-        pointer-events: none;
-    }
-    #hero-caption h2 {
-        font-size: 1.55em;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        margin: 0 0 8px 0;
-    }
-    #hero-caption p {
-        color: var(--text-dim);
-        font-size: 0.92em;
-        max-width: 460px;
-        line-height: 1.6;
-        margin: 0;
-    }
-    #node-tooltip {
-        position: absolute;
-        pointer-events: none;
-        background: var(--panel);
-        border: 1px solid var(--amber);
-        color: var(--text);
-        padding: 6px 12px;
-        border-radius: 3px;
-        font-size: 0.82em;
-        font-family: 'IBM Plex Mono', monospace;
-        display: none;
-        z-index: 5;
-        white-space: nowrap;
-    }
-    #hero-hint {
-        position: absolute;
-        bottom: 16px;
-        right: 20px;
-        color: var(--text-faint);
-        font-size: 0.72em;
-        font-family: 'IBM Plex Mono', monospace;
-        letter-spacing: 0.03em;
-        pointer-events: none;
-    }
-
-    .strip {
-        display: flex;
-        border: 1px solid var(--line);
-        border-radius: 4px;
-        overflow: hidden;
-        margin-bottom: 32px;
-    }
-    .strip-cell { flex: 1; padding: 16px 20px; border-right: 1px solid var(--line); }
-    .strip-cell:last-child { border-right: none; }
-    .strip-cell .n { font-family: 'IBM Plex Mono', monospace; font-size: 1.6em; font-weight: 600; color: var(--amber); }
-    .strip-cell .l { color: var(--text-faint); font-size: 0.78em; margin-top: 3px; }
-
-    .manifest { border-top: 1px solid var(--line); }
-    .m-row {
-        display: grid; grid-template-columns: 160px 1fr 220px; gap: 24px;
-        padding: 18px 4px; border-bottom: 1px solid var(--line); align-items: start;
-    }
-    .m-row:hover { background: var(--panel); }
-    .m-name a { color: var(--text); text-decoration: none; font-weight: 500; font-size: 0.98em; }
-    .m-name a:hover { color: var(--amber); }
-    .m-desc { color: var(--text-dim); font-size: 0.88em; line-height: 1.55; }
-    .m-metrics { font-family: 'IBM Plex Mono', monospace; font-size: 0.82em; color: var(--text-faint); text-align: right; }
-    .m-metrics .hi { color: var(--cyan); }
-</style>
-
-<div id="hero3d">
-    <div id="hero-caption">
-        <h2>Emergency Intelligence Command</h2>
-        <p>A unified operating picture for detection, prediction, and response. Drag to rotate. Click a node to enter that module.</p>
-    </div>
-    <div id="node-tooltip"></div>
-    <div id="hero-hint">DRAG TO ROTATE &middot; CLICK A NODE</div>
+<div class="page-header">
+    <h2>Operating picture</h2>
+    <p>Active incidents first, then the live incident timeline across every module. Everything on this page updates in real time.</p>
 </div>
 
-<div class="strip">
-    <div class="strip-cell"><div class="n">7</div><div class="l">ACTIVE MODULES</div></div>
-    <div class="strip-cell"><div class="n">2</div><div class="l">TRAINED VISION MODELS</div></div>
-    <div class="strip-cell"><div class="n">3</div><div class="l">SPECIALIST AGENTS</div></div>
-    <div class="strip-cell"><div class="n">0</div><div class="l">GPU DEPENDENCY</div></div>
-</div>
+<div class="grid grid-main-side">
+    <div class="stack">
+        <section class="card" id="incidents-card" aria-labelledby="incidents-title">
+            <h3 class="card-title" id="incidents-title">Active incidents <span class="hint" id="incident-count"></span></h3>
+            <div class="incident-list" id="incident-list">
+                <div class="skeleton">Loading live state&hellip;</div>
+            </div>
+        </section>
 
-<div class="manifest">
-    {% if not cloud_mode %}
-    <div class="m-row">
-        <div class="m-name"><a href="/vision">Live Vision</a></div>
-        <div class="m-desc">Real-time object detection and multi-object tracking, with switchable fire/smoke and fall-detection modes, streamed directly from camera.</div>
-        <div class="m-metrics">YOLOv8n &middot; CPU inference</div>
+        <section class="card" aria-labelledby="timeline-title">
+            <h3 class="card-title" id="timeline-title">Incident timeline <span class="hint">every module, newest first</span></h3>
+            <div class="timeline" id="timeline"><div class="skeleton">Loading&hellip;</div></div>
+        </section>
     </div>
-    {% else %}
-    <div class="m-row">
-        <div class="m-name" style="color: var(--text-faint);">Live Vision</div>
-        <div class="m-desc">Real-time object detection, tracking, and fire/smoke recognition streamed from camera. Requires local hardware - run the project locally to use this module.</div>
-        <div class="m-metrics">Local only</div>
-    </div>
-    {% endif %}
-    <div class="m-row">
-        <div class="m-name"><a href="/sensors">Sensor Fusion</a></div>
-        <div class="m-desc">Simulated temperature, smoke and gas telemetry combined into a single risk score, with rolling anomaly detection and trend forecasting.</div>
-        <div class="m-metrics">z-score anomaly detection</div>
-    </div>
-    <div class="m-row">
-        <div class="m-name"><a href="/twin">Digital Twin</a></div>
-        <div class="m-desc">Live building graph with Dijkstra-based evacuation routing. Automatically reroutes around detected hazards and flags zones with no safe exit.</div>
-        <div class="m-metrics">10-zone building model</div>
-    </div>
-    <div class="m-row">
-        <div class="m-name"><a href="/aerial">Aerial Search</a></div>
-        <div class="m-desc">Pose classification from aerial imagery, trained to distinguish distress-relevant posture (lying, seated) from active movement.</div>
-        <div class="m-metrics">mAP50 <span class="hi">0.572</span></div>
-    </div>
-    <div class="m-row">
-        <div class="m-name"><a href="/nlp">Report Analyzer</a></div>
-        <div class="m-desc">Extracts event type, severity, location and casualty count from free-text incident reports using entity recognition plus domain rules.</div>
-        <div class="m-metrics">spaCy + rule engine</div>
-    </div>
-    <div class="m-row">
-        <div class="m-name"><a href="/chat">Command Chat</a></div>
-        <div class="m-desc">Natural-language interface over live system state. A coordinating agent delegates to fire, medical and routing specialists as needed.</div>
-        <div class="m-metrics">Claude &middot; tool use</div>
+
+    <div class="stack">
+        <section class="card card-tight" aria-labelledby="figures-title">
+            <h3 class="card-title" id="figures-title">Live figures</h3>
+            <div class="stats">
+                <div class="stat"><div class="stat-label">Building risk</div><div class="stat-value" id="fig-building">&ndash;</div><div class="stat-sub">mean zone risk</div></div>
+                <div class="stat"><div class="stat-label">Sensor risk</div><div class="stat-value" id="fig-sensor">&ndash;</div><div class="stat-sub" id="fig-trend">&nbsp;</div></div>
+                <div class="stat"><div class="stat-label">Zones on fire</div><div class="stat-value" id="fig-fires">&ndash;</div><div class="stat-sub">of 8 occupiable</div></div>
+                <div class="stat"><div class="stat-label">Blocked links</div><div class="stat-value" id="fig-blocked">&ndash;</div><div class="stat-sub">corridor connections</div></div>
+            </div>
+        </section>
+
+        <section class="card card-tight">
+            <h3 class="card-title">Respond</h3>
+            <div class="btn-list">
+                <a class="btn" href="/twin">Open digital twin &amp; evacuation routes</a>
+                <a class="btn" href="/chat">Ask the command chat</a>
+                <a class="btn" href="/nlp">Analyze an incoming report</a>
+            </div>
+        </section>
     </div>
 </div>
 
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<section class="mt" aria-labelledby="modules-title">
+    <h3 class="card-title" id="modules-title" style="margin-top: var(--s5);">Modules</h3>
+    <div class="modules">
+        <a class="module" href="/twin"><h3>Digital Twin</h3><p>Building graph with Dijkstra evacuation routing that reroutes around hazards and flags isolated rooms.</p><span class="mono">10-zone model</span></a>
+        <a class="module" href="/sensors"><h3>Sensor Fusion</h3><p>Temperature, smoke and gas fused with camera confidence into one risk score, with anomaly and trend detection.</p><span class="mono">z-score anomalies</span></a>
+        {% if not cloud_mode %}
+        <a class="module" href="/vision"><h3>Live Vision</h3><p>Real-time detection and tracking with fire/smoke and fall-detection modes, streamed from the camera.</p><span class="mono">YOLOv8n &middot; CPU</span></a>
+        {% else %}
+        <div class="module is-disabled"><h3>Live Vision</h3><p>Streams from a local camera - available when the project runs locally.</p><span class="mono">local only</span></div>
+        {% endif %}
+        <a class="module" href="/nlp"><h3>Report Analyzer</h3><p>Event type, severity, location and casualties from free-text reports; fire reports propose actions.</p><span class="mono">spaCy + rules</span></a>
+        <a class="module" href="/chat"><h3>Command Chat</h3><p>Ask about the live situation; a decision agent consults fire, medical and routing specialists.</p><span class="mono">{{ llm_label }}</span></a>
+        <a class="module" href="/aerial"><h3>Aerial Search</h3><p>Pose classification on aerial imagery to spot people lying down or seated in disaster scenes.</p><span class="mono">mAP50 0.572</span></a>
+    </div>
+</section>
+
+<section class="mt" aria-labelledby="map-title">
+    <h3 class="card-title" id="map-title" style="margin-top: var(--s5);">System map <span class="hint">drag to rotate &middot; click a node to open it</span></h3>
+    <div id="hero3d" role="img" aria-label="Interactive 3D map of the system's modules">
+        <div id="node-tooltip"></div>
+        <div class="hint">DRAG TO ROTATE &middot; CLICK A NODE</div>
+    </div>
+</section>
+
 <script>
-(function() {
+(function () {
+    var socket = window.aegisSocket;
+    var esc = function (v) { return window.aegisEscape ? window.aegisEscape(v) : String(v); };
+    var live = { fires: [], risk: {}, pending: [], sensor: null };
+
+    function renderIncidents() {
+        var items = [];
+        live.fires.forEach(function (zone) {
+            items.push('<div class="incident is-danger"><span class="badge badge-CRITICAL">FIRE</span>' +
+                '<div><div class="incident-title">Fire declared in ' + esc(zone) + '</div>' +
+                '<div class="incident-meta">Routes through ' + esc(zone) + ' are blocked.</div></div>' +
+                '<a class="btn btn-sm" href="/twin">Routes</a></div>');
+        });
+        live.pending.forEach(function (p) {
+            items.push('<div class="incident is-warn"><span class="badge badge-HIGH">UNCONFIRMED</span>' +
+                '<div><div class="incident-title">' + esc(p.reason) + '</div>' +
+                '<div class="incident-meta">From ' + esc(p.source) + (p.confidence != null ? ' &middot; confidence ' + esc(p.confidence) : '') +
+                ' &middot; confirm or dismiss in the panel bottom-right</div></div></div>');
+        });
+        var s = live.sensor;
+        if (s && (s.risk_level === "HIGH" || s.risk_level === "CRITICAL" || s.anomaly)) {
+            items.push('<div class="incident"><span class="badge badge-' + esc(s.risk_level) + '">' + esc(s.risk_level) + '</span>' +
+                '<div><div class="incident-title">Sensor risk ' + s.risk_score.toFixed(1) + (s.anomaly ? ' &middot; anomaly' : '') + '</div>' +
+                '<div class="incident-meta">Trend ' + esc(s.trend.trend) + '</div></div>' +
+                '<a class="btn btn-sm" href="/sensors">Sensors</a></div>');
+        }
+        var list = document.getElementById("incident-list");
+        list.innerHTML = items.length ? items.join("") :
+            '<div class="empty">No active incidents. All zones are clear and no alerts are waiting for confirmation.</div>';
+        document.getElementById("incident-count").textContent = items.length ? items.length + " open" : "all clear";
+        document.getElementById("incidents-card").classList.toggle("is-danger", live.fires.length > 0);
+    }
+
+    socket.on("state_update", function (st) {
+        live.fires = st.nodes.filter(function (n) { return n.status === "FIRE"; }).map(function (n) { return n.id; });
+        document.getElementById("fig-building").textContent = st.overall_risk.toFixed(1);
+        document.getElementById("fig-fires").textContent = live.fires.length;
+        document.getElementById("fig-fires").className = "stat-value" + (live.fires.length ? " lvl-CRITICAL" : "");
+        document.getElementById("fig-blocked").textContent = st.blocked_edges.length;
+        renderIncidents();
+    });
+    socket.on("sensor_update", function (d) {
+        live.sensor = d;
+        var el = document.getElementById("fig-sensor");
+        el.textContent = d.risk_score.toFixed(1);
+        el.className = "stat-value lvl-" + d.risk_level;
+        document.getElementById("fig-trend").textContent = d.risk_level + " · " + d.trend.trend;
+        renderIncidents();
+    });
+    socket.on("pending_actions", function (a) { live.pending = a; renderIncidents(); });
+})();
+
+// Decorative 3D map: its 670 KB library loads only once the map scrolls into view.
+(function () {
     var container = document.getElementById("hero3d");
-    var tooltip = document.getElementById("node-tooltip");
-
-    var moduleNodes = [
-        { name: "Live Vision", url: "{{ '/vision' if not cloud_mode else '' }}", color: 0xe8a33d },
-        { name: "Sensor Fusion", url: "/sensors", color: 0x4fa8d8 },
-        { name: "Digital Twin", url: "/twin", color: 0xe5484d },
-        { name: "Aerial Search", url: "/aerial", color: 0x4caf6d },
-        { name: "Report Analyzer", url: "/nlp", color: 0x8b7fd6 },
-        { name: "Command Chat", url: "/chat", color: 0xe8a33d },
-    ];
-
-    var W = container.clientWidth, H = container.clientHeight;
-
-    var scene = new THREE.Scene();
-    var camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
-    camera.position.set(0, 1.2, 9);
-
-    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    container.appendChild(renderer.domElement);
-
-    var root = new THREE.Group();
-    scene.add(root);
-
-    var coreGeo = new THREE.IcosahedronGeometry(1.15, 1);
-    var coreMat = new THREE.MeshBasicMaterial({ color: 0xe8a33d, wireframe: true, transparent: true, opacity: 0.85 });
-    var core = new THREE.Mesh(coreGeo, coreMat);
-    root.add(core);
-
-    var coreGlowGeo = new THREE.IcosahedronGeometry(1.15, 1);
-    var coreGlowMat = new THREE.MeshBasicMaterial({ color: 0xe8a33d, transparent: true, opacity: 0.06 });
-    var coreGlow = new THREE.Mesh(coreGlowGeo, coreGlowMat);
-    coreGlow.scale.set(1.6, 1.6, 1.6);
-    root.add(coreGlow);
-
-    var orbitRadius = 3.6;
-    var nodeMeshes = [];
-
-    moduleNodes.forEach(function(mod, i) {
-        var angle = (i / moduleNodes.length) * Math.PI * 2;
-        var y = Math.sin(i * 1.7) * 0.9;
-        var x = Math.cos(angle) * orbitRadius;
-        var z = Math.sin(angle) * orbitRadius;
-
-        var geo = new THREE.SphereGeometry(0.22, 20, 20);
-        var mat = new THREE.MeshBasicMaterial({ color: mod.color });
-        var mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(x, y, z);
-        mesh.userData = { url: mod.url, name: mod.name };
-        root.add(mesh);
-        nodeMeshes.push(mesh);
-
-        var glowGeo = new THREE.SphereGeometry(0.22, 20, 20);
-        var glowMat = new THREE.MeshBasicMaterial({ color: mod.color, transparent: true, opacity: 0.25 });
-        var glow = new THREE.Mesh(glowGeo, glowMat);
-        glow.scale.set(2.2, 2.2, 2.2);
-        mesh.add(glow);
-
-        var lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), mesh.position]);
-        var lineMat = new THREE.LineBasicMaterial({ color: mod.color, transparent: true, opacity: 0.35 });
-        var line = new THREE.Line(lineGeo, lineMat);
-        root.add(line);
-    });
-
-    var starCount = 260;
-    var starPositions = new Float32Array(starCount * 3);
-    for (var i = 0; i < starCount; i++) {
-        starPositions[i*3] = (Math.random() - 0.5) * 30;
-        starPositions[i*3+1] = (Math.random() - 0.5) * 30;
-        starPositions[i*3+2] = (Math.random() - 0.5) * 30;
+    var started = false;
+    function start() {
+        if (started) return;
+        started = true;
+        var s = document.createElement("script");
+        s.src = "{{ url_for('static', filename='vendor/three-0.160.0.min.js') }}";
+        s.onload = initMap;
+        document.body.appendChild(s);
     }
-    var starGeo = new THREE.BufferGeometry();
-    starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
-    var starMat = new THREE.PointsMaterial({ color: 0x565c64, size: 0.035 });
-    var stars = new THREE.Points(starGeo, starMat);
-    scene.add(stars);
-
-    var isDragging = false;
-    var prevX = 0, prevY = 0;
-    var rotY = 0.3, rotX = -0.15;
-    var autoRotate = true;
-
-    container.addEventListener("mousedown", function(e) {
-        isDragging = true; autoRotate = false;
-        prevX = e.clientX; prevY = e.clientY;
-    });
-    window.addEventListener("mouseup", function() { isDragging = false; });
-    window.addEventListener("mousemove", function(e) {
-        if (!isDragging) return;
-        var dx = e.clientX - prevX, dy = e.clientY - prevY;
-        rotY += dx * 0.006;
-        rotX += dy * 0.006;
-        rotX = Math.max(-1.1, Math.min(1.1, rotX));
-        prevX = e.clientX; prevY = e.clientY;
-    });
-
-    var raycaster = new THREE.Raycaster();
-    var mouse = new THREE.Vector2();
-    var hovered = null;
-
-    function updateMouse(e) {
-        var rect = container.getBoundingClientRect();
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    if ("IntersectionObserver" in window) {
+        new IntersectionObserver(function (entries, obs) {
+            if (entries.some(function (e) { return e.isIntersecting; })) { obs.disconnect(); start(); }
+        }, { rootMargin: "100px" }).observe(container);
+    } else {
+        window.addEventListener("load", start);
     }
 
-    container.addEventListener("mousemove", function(e) {
-        updateMouse(e);
-        raycaster.setFromCamera(mouse, camera);
-        var intersects = raycaster.intersectObjects(nodeMeshes, false);
-        if (intersects.length > 0) {
-            var obj = intersects[0].object;
-            if (hovered !== obj) {
-                hovered = obj;
-                container.style.cursor = obj.userData.url ? "pointer" : "default";
-                tooltip.innerText = obj.userData.name + (obj.userData.url ? "" : " (local only)");
-                tooltip.style.display = "block";
-            }
+    function initMap() {
+        var tooltip = document.getElementById("node-tooltip");
+        // Module nodes: amber / info / neutral tones only - red means danger.
+        var moduleNodes = [
+            { name: "Digital Twin", url: "/twin", color: 0xe8a33d },
+            { name: "Sensor Fusion", url: "/sensors", color: 0x5bb0dd },
+            { name: "Live Vision", url: "{{ '/vision' if not cloud_mode else '' }}", color: 0xd9bc4c },
+            { name: "Report Analyzer", url: "/nlp", color: 0x8b7fd6 },
+            { name: "Command Chat", url: "/chat", color: 0xe8a33d },
+            { name: "Aerial Search", url: "/aerial", color: 0x52b876 }
+        ];
+        var W = container.clientWidth, H = container.clientHeight;
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+        camera.position.set(0, 1.0, 9);
+        var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(W, H);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        container.appendChild(renderer.domElement);
+
+        var root = new THREE.Group();
+        scene.add(root);
+        var core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 1),
+            new THREE.MeshBasicMaterial({ color: 0xe8a33d, wireframe: true, transparent: true, opacity: 0.85 }));
+        root.add(core);
+
+        var nodeMeshes = [];
+        moduleNodes.forEach(function (mod, i) {
+            var angle = (i / moduleNodes.length) * Math.PI * 2;
+            var mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 20), new THREE.MeshBasicMaterial({ color: mod.color }));
+            mesh.position.set(Math.cos(angle) * 3.6, Math.sin(i * 1.7) * 0.8, Math.sin(angle) * 3.6);
+            mesh.userData = { url: mod.url, name: mod.name };
+            root.add(mesh);
+            nodeMeshes.push(mesh);
+            var glow = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 20),
+                new THREE.MeshBasicMaterial({ color: mod.color, transparent: true, opacity: 0.22 }));
+            glow.scale.set(2.2, 2.2, 2.2);
+            mesh.add(glow);
+            root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), mesh.position]),
+                new THREE.LineBasicMaterial({ color: mod.color, transparent: true, opacity: 0.35 })));
+        });
+
+        var dragging = false, px = 0, py = 0, rotY = 0.3, rotX = -0.15, auto = true;
+        container.addEventListener("mousedown", function (e) { dragging = true; auto = false; px = e.clientX; py = e.clientY; });
+        window.addEventListener("mouseup", function () { dragging = false; });
+        window.addEventListener("mousemove", function (e) {
+            if (!dragging) return;
+            rotY += (e.clientX - px) * 0.006;
+            rotX = Math.max(-1.1, Math.min(1.1, rotX + (e.clientY - py) * 0.006));
+            px = e.clientX; py = e.clientY;
+        });
+
+        var raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2(), hovered = null;
+        container.addEventListener("mousemove", function (e) {
             var rect = container.getBoundingClientRect();
-            tooltip.style.left = (e.clientX - rect.left + 14) + "px";
-            tooltip.style.top = (e.clientY - rect.top - 10) + "px";
-        } else {
-            if (hovered) {
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            var hit = raycaster.intersectObjects(nodeMeshes, false)[0];
+            if (hit) {
+                hovered = hit.object;
+                container.style.cursor = hovered.userData.url ? "pointer" : "default";
+                tooltip.textContent = hovered.userData.name + (hovered.userData.url ? "" : " (local only)");
+                tooltip.style.display = "block";
+                tooltip.style.left = (e.clientX - rect.left + 14) + "px";
+                tooltip.style.top = (e.clientY - rect.top - 10) + "px";
+            } else if (hovered) {
                 hovered = null;
                 container.style.cursor = "grab";
                 tooltip.style.display = "none";
             }
-        }
-    });
-
-    container.addEventListener("click", function(e) {
-        if (hovered && hovered.userData.url) {
-            window.location.href = hovered.userData.url;
-        }
-    });
-
-    window.addEventListener("resize", function() {
-        var w = container.clientWidth, h = container.clientHeight;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-    });
-
-    var clock = new THREE.Clock();
-    var animationActive = true;
-    var rafId = null;
-
-    // Pause the render loop entirely when this tab isn't the visible/active
-    // one, so it stops competing for CPU with other pages (e.g. Live Vision's
-    // detection inference) running in another tab on the same machine.
-    document.addEventListener("visibilitychange", function() {
-        animationActive = !document.hidden;
-        if (animationActive && rafId === null) {
-            animate();
-        }
-    });
-
-    function animate() {
-        if (!animationActive) { rafId = null; return; }
-        rafId = requestAnimationFrame(animate);
-        var t = clock.getElapsedTime();
-
-        if (autoRotate) rotY += 0.0016;
-        root.rotation.y = rotY;
-        root.rotation.x = rotX;
-
-        core.rotation.y = t * 0.15;
-        core.rotation.x = t * 0.1;
-        var pulse = 1 + Math.sin(t * 1.4) * 0.04;
-        core.scale.set(pulse, pulse, pulse);
-        coreGlow.scale.set(1.6 + Math.sin(t*1.4)*0.08, 1.6 + Math.sin(t*1.4)*0.08, 1.6 + Math.sin(t*1.4)*0.08);
-
-        nodeMeshes.forEach(function(m, i) {
-            var s = 1 + Math.sin(t * 1.2 + i) * 0.08;
-            m.scale.set(s, s, s);
+        });
+        container.addEventListener("click", function () {
+            if (hovered && hovered.userData.url) window.location.href = hovered.userData.url;
+        });
+        window.addEventListener("resize", function () {
+            var w = container.clientWidth, h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
         });
 
-        stars.rotation.y = t * 0.01;
-
-        renderer.render(scene, camera);
+        var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var clock = new THREE.Clock(), active = true, rafId = null;
+        // Pause when the tab is hidden so it never competes with Live Vision for CPU.
+        document.addEventListener("visibilitychange", function () {
+            active = !document.hidden;
+            if (active && rafId === null) animate();
+        });
+        function animate() {
+            if (!active) { rafId = null; return; }
+            rafId = requestAnimationFrame(animate);
+            var t = clock.getElapsedTime();
+            if (auto && !reduced) rotY += 0.0016;
+            root.rotation.y = rotY;
+            root.rotation.x = rotX;
+            if (!reduced) { core.rotation.y = t * 0.15; core.rotation.x = t * 0.1; }
+            renderer.render(scene, camera);
+        }
+        animate();
+        window.addEventListener("pagehide", function () {
+            active = false;
+            if (rafId !== null) cancelAnimationFrame(rafId);
+            renderer.dispose();
+        });
     }
-    animate();
-
-    // Also fully release the WebGL context if the user navigates away from
-    // this page, rather than relying solely on the browser to garbage
-    // collect it - frees the GPU/CPU immediately instead of eventually.
-    window.addEventListener("pagehide", function() {
-        animationActive = false;
-        if (rafId !== null) cancelAnimationFrame(rafId);
-        renderer.dispose();
-    });
 })();
 </script>
 {% endblock %}
