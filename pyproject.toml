@@ -31,4 +31,4 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 known-first-party = ["aegis_core"]
 # command_center's own modules (run with command_center/ as the working directory)
-known-local-folder = ["app", "security", "helpers", "conftest", "fakes"]
+known-local-folder = ["app", "security", "safe_markdown", "helpers", "conftest", "fakes"]

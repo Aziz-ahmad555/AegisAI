@@ -116,11 +116,13 @@
     socket.on("chat_event", function (ev) {
         if (!current) return;
         var c = current;
-        if (ev.type === "text") {
-            if (!c.started) { c.body.textContent = ""; c.started = true; }
-            c.body.textContent += ev.text;
-        } else if (ev.type === "reset") {
-            c.body.textContent = ""; c.started = true;
+        if (ev.type === "html") {
+            // Server-rendered Markdown, already sanitized by safe_markdown
+            // (no raw HTML, scripts, handlers or images; safe links only).
+            // Model text never reaches innerHTML any other way.
+            c.body.classList.add("md");
+            c.body.innerHTML = ev.html;
+            c.started = true;
         } else if (ev.type === "agent") {
             if (c.agents.indexOf(ev.agent) === -1) {
                 c.agents.push(ev.agent);
@@ -137,7 +139,6 @@
             c.body.textContent = ev.text;
         } else if (ev.type === "done") {
             if (!c.started) c.body.textContent = "(no answer)";
-            c.body.textContent = c.body.textContent.replace(/^\n+/, "");
             current = null;
             setBusy(false);
         }

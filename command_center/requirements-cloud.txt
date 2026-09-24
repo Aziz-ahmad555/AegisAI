@@ -35,6 +35,7 @@ MarkupSafe==3.0.3
 mdurl==0.1.2
 murmurhash==1.0.15
 networkx==3.6.1
+nh3==0.3.7
 numpy==2.4.6
 packaging==26.3
 preshed==3.0.13

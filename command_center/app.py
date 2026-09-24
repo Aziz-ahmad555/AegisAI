@@ -16,6 +16,7 @@ from aegis_core.emergency_nlp import parse_emergency_report
 from aegis_core.sensor_state import SensorFusionState
 from aegis_core.system import AegisSystem
 
+import safe_markdown
 import security
 
 # When true (set via env var on the hosted deployment), Live Vision is hidden
@@ -278,6 +279,7 @@ def api_chat():
 _chat_histories = OrderedDict()      # chat_id -> list of {"role", "content"}
 _chat_lock = threading.Lock()
 MAX_CHAT_SESSIONS = 200
+CHAT_RENDER_INTERVAL = 0.08   # seconds between streamed re-renders (~12/s)
 
 
 def _question_error(question):
@@ -425,14 +427,30 @@ def handle_chat_ask(data):
     def run():
         # Streams to the asking browser only; the answer (minus anything a
         # refusal/failure told us to discard) becomes conversation memory.
+        # Model text is untrusted: the browser only ever receives it as
+        # server-sanitized HTML (safe_markdown), re-rendered as it grows so
+        # Markdown displays correctly mid-stream.
         chunks = []
+        last_render = 0.0
+
+        def push_html():
+            html = safe_markdown.render("".join(chunks).lstrip("\n"))
+            socketio.emit("chat_event", {"type": "html", "html": html}, to=sid)
+
         try:
             for event in coordinator.iter_coordinator(question, llm_client, history):
+                if event["type"] == "text":
+                    chunks.append(event["text"])
+                    if time.monotonic() - last_render >= CHAT_RENDER_INTERVAL:
+                        push_html()
+                        last_render = time.monotonic()
+                    continue
                 if event["type"] == "reset":
                     chunks = []
-                elif event["type"] == "text":
-                    chunks.append(event["text"])
+                    push_html()
+                    continue
                 socketio.emit("chat_event", event, to=sid)
+            push_html()                   # final, complete render
             _remember_turn(question, "".join(chunks).lstrip("\n"), chat_id)
         except Exception as e:           # never leave the operator's UI hanging
             print(f"[chat] failed: {e}")

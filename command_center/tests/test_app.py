@@ -123,7 +123,8 @@ def test_chat_streams_to_the_asker_and_remembers_the_conversation(client, monkey
     asker.emit("chat_ask", {"question": "Are the routes open?"})
     events = _collect_chat(asker)
     assert {"type": "agent", "agent": "Route"} in events
-    assert "".join(e["text"] for e in events if e["type"] == "text") == "All routes are open."
+    assert [e for e in events if e["type"] == "text"] == []          # raw model text never sent
+    assert [e for e in events if e["type"] == "html"][-1]["html"].strip() == "<p>All routes are open.</p>"
     assert not any(m["name"] == "chat_event" for m in other.get_received())   # nobody else sees it
 
     asker.emit("chat_ask", {"question": "And from Room202?"})
@@ -156,3 +157,26 @@ def test_chat_page_shows_the_configured_model(client, monkeypatch):
     monkeypatch.setattr(aegis, "llm_client", claude([("end_turn", [])]))
     login(client)
     assert b"claude-sonnet-5" in client.get("/chat").data
+
+
+def test_malicious_model_output_reaches_the_browser_only_as_inert_html(client, monkeypatch):
+    from fakes import claude, text
+
+    evil = ("**Warning** <img src=x onerror=alert(1)> <script>alert(2)</script> "
+            "[x](javascript:alert(3)) ![p](https://attacker.example/leak)")
+    monkeypatch.setattr(aegis, "llm_client", claude([("end_turn", [text(evil)])]))
+    login(client)
+    sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    sio.get_received()
+    sio.emit("chat_ask", {"question": "status?"})
+    events = _collect_chat(sio)
+    final = [e for e in events if e["type"] == "html"][-1]["html"]
+    assert "<strong>Warning</strong>" in final
+    from test_safe_markdown import parsed
+
+    for needle in ("<img", "<script", "attacker.example"):
+        assert needle not in final
+    for _tag, attrs in parsed(final):         # no handler / script scheme in any real tag
+        assert not any(k.startswith("on") or "javascript:" in (v or "").lower() for k, v in attrs.items())
+    assert "&lt;img src=x onerror=alert(1)&gt;" in final                  # visible, not executable
+    sio.disconnect()
