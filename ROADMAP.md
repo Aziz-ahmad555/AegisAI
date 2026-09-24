@@ -87,11 +87,11 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 
 ## Stage 5 — LLM & agent upgrades
 
-- [ ] Update to a current Claude model; model id configurable via env var.
-- [ ] Stream chat responses token-by-token to the UI.
-- [ ] Cap tool-use loop iterations; timeouts; show which agents were consulted in the UI.
-- [ ] Conversation memory within a session ("and what about Room202?").
-- [ ] Every agent answer cites the state it used (zone, reading, timestamp).
+- [x] Current Claude model (`claude-opus-5`, verified against Anthropic's model docs); `AEGISAI_CLAUDE_MODEL` / `AEGISAI_CLAUDE_EFFORT` configurable; server-side refusal fallbacks on by default.
+- [x] Chat answers stream over Socket.IO to the asking browser only; refusals and mid-stream failures discard partial text and fall back to the offline summary.
+- [x] 5-round tool cap kept; truncated tool calls never run; tool input validated; 60 s client timeout; consulted agents shown as chips on each answer.
+- [x] Conversation memory: last 6 Q/A pairs per login (server-side, bounded); "New conversation" clears it.
+- [ ] Every agent answer cites the state it used (zone, reading, timestamp). Agent data already carries zones, readings and ages; making the answer cite them needs a real-API evaluation (no API key available in this environment yet).
 
 ## Stage 6 — Frontend redesign & UX
 
