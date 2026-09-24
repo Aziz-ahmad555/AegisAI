@@ -1,14 +1,17 @@
 import os
+import secrets
 import threading
 import time
+from collections import OrderedDict
 from functools import wraps
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 from flask_socketio import SocketIO, disconnect, emit
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from aegis_core import coordinator
 from aegis_core.building_state import BuildingDigitalTwin
-from aegis_core.coordinator import ask_coordinator, get_client, init_agents
+from aegis_core.coordinator import get_client, init_agents
 from aegis_core.emergency_nlp import parse_emergency_report
 from aegis_core.sensor_state import SensorFusionState
 from aegis_core.system import AegisSystem
@@ -126,6 +129,10 @@ def login():
             # token is issued on the next page render.
             session.clear()
             session["logged_in"] = True
+            # Created here (HTTP), not in a socket handler: Flask-SocketIO keeps
+            # a per-connection copy of the session, so an id minted there would
+            # never reach the browser's cookie and the pages couldn't share it.
+            session["chat_id"] = secrets.token_urlsafe(16)
             return redirect(url_for("overview"))
         login_limiter.record_failure(client)
         error = "Invalid credentials"
@@ -160,8 +167,9 @@ def nlp_page():
 @app.route("/chat")
 @login_required
 def chat_page():
+    _chat_id()   # sessions from before chat memory existed get their id here
     llm_status = "connected" if llm_client else "offline (keyword-routing fallback)"
-    return render_template("chat.html", llm_status=llm_status)
+    return render_template("chat.html", llm_status=llm_status, llm_model=coordinator.MODEL)
 
 
 @app.route("/sensors")
@@ -248,15 +256,64 @@ def api_decide_action(proposal_id):
 @app.route("/api/chat", methods=["POST"])
 @login_required
 def api_chat():
+    # Blocking form (scripts, tests); the chat page streams over Socket.IO.
     data = request.get_json(force=True, silent=True) or {}
     question = data.get("question", "")
-    if not isinstance(question, str) or not question.strip():
-        return jsonify({"error": "No question provided"}), 400
-    if len(question) > security.MAX_QUESTION_CHARS:
-        return jsonify({"error": f"Question too long (max {security.MAX_QUESTION_CHARS} characters)"}), 413
-    answer = ask_coordinator(question, llm_client)
+    error = _question_error(question)
+    if error:
+        return jsonify({"error": error[0]}), error[1]
+    answer = coordinator.ask_coordinator(question, llm_client, _chat_history())
+    _remember_turn(question, answer)
     mode = "llm" if llm_client else "offline"
     return jsonify({"answer": answer, "mode": mode})
+
+
+# --- chat memory ---------------------------------------------------------------
+# Short per-login conversation memory ("and what about Room202?"). Kept
+# server-side and bounded - only question/answer text, never tool data.
+
+_chat_histories = OrderedDict()      # chat_id -> list of {"role", "content"}
+_chat_lock = threading.Lock()
+MAX_CHAT_SESSIONS = 200
+
+
+def _question_error(question):
+    if not isinstance(question, str) or not question.strip():
+        return "No question provided", 400
+    if len(question) > security.MAX_QUESTION_CHARS:
+        return f"Question too long (max {security.MAX_QUESTION_CHARS} characters)", 413
+    return None
+
+
+def _chat_id():
+    if "chat_id" not in session:
+        session["chat_id"] = secrets.token_urlsafe(16)
+    return session["chat_id"]
+
+
+def _chat_history(chat_id=None):
+    with _chat_lock:
+        return list(_chat_histories.get(chat_id or _chat_id(), []))
+
+
+def _remember_turn(question, answer, chat_id=None):
+    chat_id = chat_id or _chat_id()
+    if not answer.strip():
+        return
+    with _chat_lock:
+        turns = _chat_histories.pop(chat_id, [])
+        turns += [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
+        _chat_histories[chat_id] = turns[-2 * coordinator.HISTORY_TURNS:]
+        while len(_chat_histories) > MAX_CHAT_SESSIONS:
+            _chat_histories.popitem(last=False)
+
+
+@app.route("/api/chat/reset", methods=["POST"])
+@login_required
+def api_chat_reset():
+    with _chat_lock:
+        _chat_histories.pop(_chat_id(), None)
+    return jsonify({"ok": True})
 
 
 AERIAL_SAMPLES = [
@@ -346,6 +403,41 @@ def handle_decide_action(data):
         return
     if system.decide(proposal_id, bool(data.get("approve"))) is not None:
         broadcast_twin_state()
+
+
+@socketio.on("chat_ask")
+def handle_chat_ask(data):
+    if not session.get("logged_in"):
+        disconnect()
+        return
+    question = (data or {}).get("question", "")
+    sid = request.sid
+    error = _question_error(question)
+    if error:
+        emit("chat_event", {"type": "error", "text": error[0]})
+        return
+    chat_id = _chat_id()
+    history = _chat_history(chat_id)
+
+    def run():
+        # Streams to the asking browser only; the answer (minus anything a
+        # refusal/failure told us to discard) becomes conversation memory.
+        chunks = []
+        try:
+            for event in coordinator.iter_coordinator(question, llm_client, history):
+                if event["type"] == "reset":
+                    chunks = []
+                elif event["type"] == "text":
+                    chunks.append(event["text"])
+                socketio.emit("chat_event", event, to=sid)
+            _remember_turn(question, "".join(chunks).lstrip("\n"), chat_id)
+        except Exception as e:           # never leave the operator's UI hanging
+            print(f"[chat] failed: {e}")
+            socketio.emit("chat_event", {"type": "error", "text": "The coordinator failed; please retry."}, to=sid)
+        finally:
+            socketio.emit("chat_event", {"type": "done"}, to=sid)
+
+    socketio.start_background_task(run)
 
 
 @socketio.on("trigger_sensor_event")

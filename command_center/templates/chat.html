@@ -37,11 +37,25 @@
         border-radius: 4px; cursor: pointer; font-size: 0.8em; font-family: 'IBM Plex Sans', sans-serif;
     }
     .suggested:hover { color: var(--text); border-color: var(--amber); }
+    .msg-agents:empty, .msg-notice:empty, .msg-meta:empty { display: none; }
+    .msg-agents { display: flex; gap: 5px; margin-bottom: 7px; flex-wrap: wrap; }
+    .agent-chip {
+        font-family: 'IBM Plex Mono', monospace; font-size: 0.72em; color: var(--cyan);
+        border: 1px solid var(--line); border-radius: 3px; padding: 1px 6px;
+    }
+    .msg-notice { margin-top: 7px; font-size: 0.78em; color: var(--amber); }
+    .typing { color: var(--text-faint); font-style: italic; }
+    #chat-send:disabled, #chat-input:disabled { opacity: 0.6; cursor: default; }
+    .new-chat {
+        display: block; width: 100%; margin-top: 14px; padding: 8px; background: transparent;
+        color: var(--text-dim); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; font-size: 0.8em;
+    }
+    .new-chat:hover { color: var(--text); border-color: var(--text-dim); }
 </style>
 
 <div class="chat-status {{ 'status-connected' if llm_status == 'connected' else 'status-offline' }}">
     <span class="status-dot"></span>
-    {% if llm_status == 'connected' %}Connected &middot; Claude{% else %}Offline &middot; keyword routing{% endif %}
+    {% if llm_status == 'connected' %}Connected &middot; {{ llm_model }}{% else %}Offline &middot; keyword routing{% endif %}
 </div>
 
 <div style="display: flex; gap: 18px;">
@@ -59,58 +73,105 @@
         <button class="suggested" onclick="askSuggested('How many people need rescue?')">How many people need rescue?</button>
         <button class="suggested" onclick="askSuggested('Can people evacuate safely?')">Can people evacuate safely?</button>
         <button class="suggested" onclick="askSuggested('What is the full situation right now?')">Full situation summary</button>
+        <button class="new-chat" onclick="newConversation()">New conversation</button>
     </div>
 </div>
 
 <script>
-    function appendMessage(text, sender, meta) {
-        var win = document.getElementById("chat-window");
+    // Answers stream over the shared Socket.IO connection: text arrives in
+    // chunks, plus which specialist agents were consulted and any notices.
+    var socket = window.aegisSocket;
+    var win = document.getElementById("chat-window");
+    var input = document.getElementById("chat-input");
+    var sendBtn = document.getElementById("chat-send");
+    var current = null;   // the coordinator bubble being streamed into
+
+    function bubble(sender) {
         var msg = document.createElement("div");
         msg.className = "msg " + (sender === "operator" ? "msg-operator" : "msg-coordinator");
-        msg.innerText = text;
-        if (meta) {
-            var metaDiv = document.createElement("div");
-            metaDiv.className = "msg-meta";
-            metaDiv.innerText = meta;
-            msg.appendChild(metaDiv);
-        }
         win.appendChild(msg);
         win.scrollTop = win.scrollHeight;
+        return msg;
+    }
+
+    function appendMessage(text, sender) {
+        bubble(sender).textContent = text;
+    }
+
+    function startAnswer() {
+        var msg = bubble("coordinator");
+        msg.innerHTML = '<div class="msg-agents"></div><div class="msg-body"><span class="typing">Consulting agents&hellip;</span></div>' +
+                        '<div class="msg-notice"></div><div class="msg-meta"></div>';
+        current = { el: msg, body: msg.querySelector(".msg-body"), agents: [], started: false };
+    }
+
+    function setBusy(busy) {
+        input.disabled = busy;
+        sendBtn.disabled = busy;
+        if (!busy) input.focus();
+    }
+
+    socket.on("chat_event", function (ev) {
+        if (!current) return;
+        var c = current;
+        if (ev.type === "text") {
+            if (!c.started) { c.body.textContent = ""; c.started = true; }
+            c.body.textContent += ev.text;
+        } else if (ev.type === "reset") {
+            c.body.textContent = ""; c.started = true;
+        } else if (ev.type === "agent") {
+            if (c.agents.indexOf(ev.agent) === -1) {
+                c.agents.push(ev.agent);
+                var chip = document.createElement("span");
+                chip.className = "agent-chip";
+                chip.textContent = ev.agent + " agent";
+                c.el.querySelector(".msg-agents").appendChild(chip);
+            }
+        } else if (ev.type === "notice") {
+            c.el.querySelector(".msg-notice").textContent = ev.text;
+        } else if (ev.type === "mode") {
+            c.el.querySelector(".msg-meta").textContent = ev.mode === "llm" ? "Claude" : "offline keyword routing";
+        } else if (ev.type === "error") {
+            c.body.textContent = ev.text;
+        } else if (ev.type === "done") {
+            if (!c.started) c.body.textContent = "(no answer)";
+            c.body.textContent = c.body.textContent.replace(/^\n+/, "");
+            current = null;
+            setBusy(false);
+        }
+        win.scrollTop = win.scrollHeight;
+    });
+
+    socket.on("disconnect", function () {
+        if (current) {
+            current.el.querySelector(".msg-notice").textContent = "Connection lost - answer may be incomplete.";
+            current = null;
+            setBusy(false);
+        }
+    });
+
+    function sendMessage() {
+        var question = input.value.trim();
+        if (!question || current) return;
+        appendMessage(question, "operator");
+        input.value = "";
+        startAnswer();
+        setBusy(true);
+        socket.emit("chat_ask", { question: question });
     }
 
     function askSuggested(text) {
-        document.getElementById("chat-input").value = text;
+        input.value = text;
         sendMessage();
     }
 
-    function sendMessage() {
-        var input = document.getElementById("chat-input");
-        var question = input.value.trim();
-        if (!question) return;
-
-        appendMessage(question, "operator");
-        input.value = "";
-
-        appendMessage("...", "coordinator");
-        var win = document.getElementById("chat-window");
-        var thinkingMsg = win.lastChild;
-
-        fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: question })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            win.removeChild(thinkingMsg);
-            appendMessage(data.answer, "coordinator", data.mode);
-        })
-        .catch(function() {
-            win.removeChild(thinkingMsg);
-            appendMessage("Error contacting the coordinator.", "coordinator");
+    function newConversation() {
+        fetch("/api/chat/reset", { method: "POST" }).then(function () {
+            win.innerHTML = "";
+            appendMessage("New conversation. Earlier questions are forgotten.", "coordinator");
         });
     }
 
-    appendMessage("Ready. Ask about active incidents, evacuation status, or medical needs.", "coordinator");
+    appendMessage("Ready. Ask about active incidents, evacuation status, or medical needs. Follow-up questions keep context.", "coordinator");
 </script>
 {% endblock %}

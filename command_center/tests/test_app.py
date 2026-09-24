@@ -85,3 +85,73 @@ def test_decide_unknown_action_returns_404(client):
     login(client)
     r = api_post(client, "/api/actions/99999", {"approve": True})
     assert r.status_code == 404
+
+
+# --- streaming chat over Socket.IO -------------------------------------------------------
+
+def _collect_chat(sio, timeout=10.0):
+    """Gather chat_event messages until the server sends 'done'."""
+    import time
+
+    events, deadline = [], time.time() + timeout
+    while time.time() < deadline:
+        for m in sio.get_received():
+            if m["name"] == "chat_event":
+                events.append(m["args"][0])
+                if events[-1]["type"] == "done":
+                    return events
+        time.sleep(0.02)
+    raise AssertionError(f"no 'done' event; got {events}")
+
+
+def test_chat_streams_to_the_asker_and_remembers_the_conversation(client, monkeypatch):
+    from fakes import FakeClient, text, tool
+
+    fake = FakeClient([
+        ("tool_use", [tool("consult_route_agent")]),
+        ("end_turn", [text("All routes are open.")]),
+        ("end_turn", [text("Room202 exits via Stairwell.")]),
+    ])
+    monkeypatch.setattr(aegis, "llm_client", fake)
+    login(client)
+    asker = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    other = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    asker.get_received()
+    other.get_received()
+
+    asker.emit("chat_ask", {"question": "Are the routes open?"})
+    events = _collect_chat(asker)
+    assert {"type": "agent", "agent": "Route"} in events
+    assert "".join(e["text"] for e in events if e["type"] == "text") == "All routes are open."
+    assert not any(m["name"] == "chat_event" for m in other.get_received())   # nobody else sees it
+
+    asker.emit("chat_ask", {"question": "And from Room202?"})
+    _collect_chat(asker)
+    followup = fake.requests[-1]["messages"]
+    assert followup[:2] == [{"role": "user", "content": "Are the routes open?"},
+                            {"role": "assistant", "content": "All routes are open."}]
+
+    assert api_post(client, "/api/chat/reset").status_code == 200
+    asker.emit("chat_ask", {"question": "Fresh start?"})
+    _collect_chat(asker)
+    assert fake.requests[-1]["messages"] == [{"role": "user", "content": "Fresh start?"}]
+    asker.disconnect()
+    other.disconnect()
+
+
+def test_chat_socket_rejects_oversized_question(client):
+    login(client)
+    sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    sio.get_received()
+    sio.emit("chat_ask", {"question": "x" * (aegis.security.MAX_QUESTION_CHARS + 1)})
+    events = [m["args"][0] for m in sio.get_received() if m["name"] == "chat_event"]
+    assert events and events[0]["type"] == "error" and "too long" in events[0]["text"]
+    sio.disconnect()
+
+
+def test_chat_page_shows_the_configured_model(client, monkeypatch):
+    from fakes import FakeClient
+
+    monkeypatch.setattr(aegis, "llm_client", FakeClient([("end_turn", [])]))
+    login(client)
+    assert b"claude-opus-5" in client.get("/chat").data
