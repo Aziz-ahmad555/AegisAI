@@ -25,7 +25,8 @@ Tasks:
 - [x] Cloud mode never imports the vision stack (lazy import)
 - [x] Production server config — decided and verified (see **Production server** below).
 - [x] Live Vision tracking thresholds configurable (`AEGISAI_TRACK_CONF`, `AEGISAI_INFER_SIZE`, `AEGISAI_TRACK_MODEL`); overlay no longer collides with box labels; `tools/diagnose_detections.py` for raw per-class confidence + latency.
-- [ ] Choose tracking defaults (model / size / threshold) from a real phone-in-hand diagnostic capture (blocked: every capture from this session's processes returns black frames; needs a run by the user in front of the camera).
+- [x] Tracking defaults chosen from a real phone-in-hand capture (151 lit frames, dark screen, fingers over it): **keep yolov8n @ 320, threshold 0.25.** yolov8n@320 finds the phone in 142/151 frames (median 0.72) and the full app tracking path keeps it in 139/151; yolov8s@320 matches that hit rate with higher confidence (0.82) but ~2x inference cost and recurring false 'bird' boxes; 416/640 add latency and false positives (yolov8n@640: 'bird' in every frame). Lowering to 0.20 gains 2 frames, raising to 0.30 loses 1. The earlier live miss could not be reproduced on these frames.
+- [x] Diagnostic warm-up waits for *lit* frames (this webcam delivers ~5 s of black frames after opening) and excludes black frames from the stats.
 
 ### Production server (decision, 2026-09-24)
 

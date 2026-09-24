@@ -27,6 +27,7 @@ from collections import defaultdict
 import cv2
 
 DARK_MEAN = 25  # mean pixel value below which a frame is effectively black
+WARMUP_TIMEOUT = 10.0  # seconds to wait for the camera to deliver lit frames
 WATCH = {"cell phone", "person", "remote", "book", "laptop"}
 
 
@@ -40,19 +41,26 @@ def capture(seconds, every):
     if not cap.isOpened():
         sys.exit("No camera available (is the Command Center still running? it holds the camera)")
 
-    # Auto-exposure warm-up: discard frames until brightness stops changing
-    # (or 3 s pass), so the first captured frames aren't under-exposed.
-    t0, prev, stable = time.time(), None, 0
-    while time.time() - t0 < 3 and stable < 5:
+    # Warm-up: some webcams deliver black frames for several seconds after
+    # opening (measured ~5 s on the dev laptop). Waiting for brightness to be
+    # *stable* isn't enough - a black stream is perfectly stable - so wait
+    # until frames are actually lit, then for exposure to settle.
+    t0, prev, stable, b = time.time(), None, 0, 0.0
+    while time.time() - t0 < WARMUP_TIMEOUT and stable < 5:
         ok, frame = cap.read()
         if not ok:
             continue
         b = frame.mean()
-        stable = stable + 1 if prev is not None and abs(b - prev) < 1.0 else 0
+        lit = b >= DARK_MEAN
+        stable = stable + 1 if lit and prev is not None and abs(b - prev) < 2.0 else 0
         prev = b
-    print(f"Camera warmed up in {time.time() - t0:.1f}s, brightness {prev if prev is not None else 0:.1f}/255")
+    if b < DARK_MEAN:
+        print(f"WARNING: camera still dark after {WARMUP_TIMEOUT:.0f}s (brightness {b:.1f}/255) - "
+              "lens covered or room too dark?")
+    else:
+        print(f"Camera warmed up in {time.time() - t0:.1f}s, brightness {b:.1f}/255")
 
-    print(f"Capturing for {seconds}s - hold the object up to the camera now...")
+    print(f"Capturing for {seconds}s - hold the object up to the camera NOW...")
     frames, n, t0 = [], 0, time.time()
     while time.time() - t0 < seconds:
         ok, frame = cap.read()
@@ -129,12 +137,15 @@ def main():
         sys.exit("No frames.")
 
     levels = [f.mean() for f in frames]
-    dark = sum(1 for b in levels if b < DARK_MEAN)
     print(f"{len(frames)} frames, brightness mean {statistics.mean(levels):.1f} "
           f"min {min(levels):.1f} max {max(levels):.1f} (/255)")
-    if dark > len(frames) / 2:
-        print(f"WARNING: {dark}/{len(frames)} frames are essentially black - camera covered, "
-              "privacy shutter closed, or the room is dark. Results below are not meaningful.")
+    # Black frames can't contain detections and would skew hit rates, so they
+    # are excluded from the analysis (and reported). All raw frames are saved.
+    lit = [f for f, b in zip(frames, levels) if b >= DARK_MEAN]
+    if len(lit) < len(frames):
+        print(f"Excluding {len(frames) - len(lit)} black frame(s) (brightness < {DARK_MEAN}); analysing {len(lit)}.")
+    if not lit:
+        sys.exit("All frames are black - camera covered, privacy shutter closed, or the room is dark.")
 
     os.makedirs(args.out, exist_ok=True)
     if args.frames is None:
@@ -149,7 +160,7 @@ def main():
             print(f"\n=== {model_path}: not found locally, skipped (pass --allow-download to fetch it) ===")
             continue
         for size in args.sizes:
-            evaluate(model_path, size, frames, args.conf, args.out)
+            evaluate(model_path, size, lit, args.conf, args.out)
 
 
 if __name__ == "__main__":
