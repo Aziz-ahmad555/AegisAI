@@ -119,7 +119,7 @@ def test_groq_tool_loop_is_bounded():
     llm = groq([groq_tool_calls(("c", "consult_route_agent", "{}"))])      # never stops asking
     events = run("route?", llm)
     assert len(llm.client.requests) == coordinator.MAX_TOOL_ROUNDS
-    assert any(e["type"] == "notice" and "tool rounds" in e["text"] for e in events)
+    assert any(e["type"] == "notice" and "round limit" in e["text"] for e in events)
     assert answer_text(events).startswith("[OFFLINE MODE")
 
 
@@ -261,3 +261,55 @@ def test_startup_check_selects_an_available_model(monkeypatch):
     llm, description = coordinator.get_llm({"GROQ_API_KEY": FAKE_KEY})
     assert llm.model == "llama-3.1-8b-instant"
     assert description == "groq / llama-3.1-8b-instant (auto-selected: available to this key)"
+
+
+# --- every fallback says why, in the notice and in the terminal ----------------------------------
+
+def _notice(events):
+    return next(e["text"] for e in events if e["type"] == "notice")
+
+
+def test_unexpected_exception_names_type_and_message_and_logs_traceback(monkeypatch, capsys):
+    def broken():
+        raise KeyError("declared_fires")
+    monkeypatch.setitem(coordinator.AGENT_FUNCTIONS, "consult_fire_agent", broken)
+    events = run("fire?", groq([groq_tool_calls(("c", "consult_fire_agent", "{}")), groq_text("x")]))
+    assert "KeyError" in _notice(events) and "declared_fires" in _notice(events)
+    out = capsys.readouterr().out
+    assert "[groq fallback: error] KeyError" in out and "Traceback" in out
+
+
+@pytest.mark.parametrize("turn, expected", [
+    (groq_text("partial", finish="content_filter"), "declined"),
+    (groq_tool_calls(("c", "consult_fire_agent", '{"a":'), finish="length"), "cut off"),
+])
+def test_non_exception_fallbacks_are_logged_too(turn, expected, capsys):
+    events = run("fire?", groq([turn]))
+    assert expected in _notice(events)
+    assert "[groq fallback:" in capsys.readouterr().out
+
+
+def test_rounds_limit_fallback_is_logged(capsys):
+    events = run("route?", groq([groq_tool_calls(("c", "consult_route_agent", "{}"))]))
+    assert "round limit" in _notice(events)
+    assert "[groq fallback: too_many_rounds]" in capsys.readouterr().out
+
+
+def test_key_like_strings_are_redacted_everywhere(monkeypatch, capsys):
+    leaked = "gsk_" + "A1b2C3d4" * 6
+
+    def leaky():
+        raise RuntimeError(f"upstream said: invalid key {leaked}")
+    monkeypatch.setitem(coordinator.AGENT_FUNCTIONS, "consult_fire_agent", leaky)
+    events = run("fire?", groq([groq_tool_calls(("c", "consult_fire_agent", "{}")), groq_text("x")]))
+    out = capsys.readouterr().out
+    assert leaked not in _notice(events) and leaked not in out
+    assert "gsk_[redacted]" in _notice(events) and "gsk_[redacted]" in out
+
+
+def test_provider_error_log_line_has_type_and_message(capsys):
+    err = _status_error(429, {"error": {"message": "Rate limit reached for model", "type": "tokens"}})
+    events = run("fire?", groq([err]))
+    assert "HTTP 429" in _notice(events)
+    out = capsys.readouterr().out
+    assert "[groq fallback: unavailable] RateLimitError" in out and "Rate limit reached" in out

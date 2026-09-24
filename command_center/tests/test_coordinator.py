@@ -125,7 +125,7 @@ def test_tool_loop_is_bounded():
     llm = claude([("tool_use", [tool("consult_route_agent")])])   # never stops asking
     events = run("route?", llm)
     assert len(llm.client.requests) == coordinator.MAX_TOOL_ROUNDS
-    assert any(e["type"] == "notice" and "tool rounds" in e["text"] for e in events)
+    assert any(e["type"] == "notice" and "round limit" in e["text"] for e in events)
     assert answer_text(events).startswith("[OFFLINE MODE")
 
 

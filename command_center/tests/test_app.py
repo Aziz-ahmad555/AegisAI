@@ -180,3 +180,35 @@ def test_malicious_model_output_reaches_the_browser_only_as_inert_html(client, m
         assert not any(k.startswith("on") or "javascript:" in (v or "").lower() for k, v in attrs.items())
     assert "&lt;img src=x onerror=alert(1)&gt;" in final                  # visible, not executable
     sio.disconnect()
+
+
+def test_successful_groq_stream_is_not_replaced_by_the_offline_answer(client, monkeypatch):
+    # Regression guard: a working Groq answer (with a tool round) must reach
+    # the browser as the model's answer - never the offline fallback text.
+    from fakes import groq, groq_text, groq_tool_calls
+
+    llm = groq([
+        groq_tool_calls(("c1", "consult_fire_agent", "{}")),
+        groq_text("**No active fires.** All zones are clear."),
+        groq_text("Still no fires."),
+    ])
+    monkeypatch.setattr(aegis, "llm_client", llm)
+    login(client)
+    sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    sio.get_received()
+
+    turns = []
+    for question, expected in [("is there any fire right now?", "<strong>No active fires.</strong>"),
+                               ("and now?", "Still no fires.")]:          # 2nd turn carries history
+        sio.emit("chat_ask", {"question": question})
+        events = _collect_chat(sio)
+        turns.append(events)
+        final = [e for e in events if e["type"] == "html"][-1]["html"]
+        assert expected in final
+        assert "OFFLINE MODE" not in final
+        assert not [e for e in events if e["type"] in ("notice", "reset", "error")], events
+        assert {"type": "mode", "mode": "llm", "provider": "groq", "model": llm.model} in events
+    assert {"type": "agent", "agent": "Fire"} in turns[0]                    # tool round happened
+    second_request = llm.client.requests[-1]["messages"]
+    assert {"role": "user", "content": "is there any fire right now?"} in second_request
+    sio.disconnect()

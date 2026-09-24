@@ -470,7 +470,7 @@ def handle_chat_ask(data):
             push_html()                   # final, complete render
             _remember_turn(question, "".join(chunks).lstrip("\n"), chat_id)
         except Exception as e:           # never leave the operator's UI hanging
-            print(f"[chat] failed: {e}")
+            print(f"[chat] failed: {type(e).__name__}: {coordinator._short(e, 300)}", flush=True)
             socketio.emit("chat_event", {"type": "error", "text": "The coordinator failed; please retry."}, to=sid)
         finally:
             socketio.emit("chat_event", {"type": "done"}, to=sid)

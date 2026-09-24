@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import traceback
 from dataclasses import dataclass
 
 import anthropic
@@ -269,28 +271,53 @@ def iter_coordinator(question, llm, history=None):
     loop = _claude_rounds if llm.provider == "claude" else _groq_rounds
     try:
         outcome = yield from loop(llm, question, history or [], state)
-        if outcome == "refused":
-            yield from fall_back("The model declined this request; showing the offline agent summary instead.")
-        elif outcome == "truncated_tool":
-            yield from fall_back("The answer was cut off; showing the offline agent summary instead.")
+        reasons = {
+            "refused": "The model declined this request",
+            "truncated_tool": f"The model's tool call was cut off at the {llm.provider} length limit",
+            "too_many_rounds": f"The model kept calling tools past the {MAX_TOOL_ROUNDS}-round limit",
+        }
+        if outcome in reasons:
+            _log_fallback(llm, outcome, reasons[outcome])
+            yield from fall_back(reasons[outcome] + "; showing the offline agent summary instead.")
         elif outcome == "truncated_text":
             yield {"type": "notice", "text": "Answer truncated at the length limit."}
-        elif outcome == "too_many_rounds":
-            yield from fall_back(f"The coordinator exceeded {MAX_TOOL_ROUNDS} tool rounds; "
-                                 "showing the offline agent summary instead.")
     except Exception as e:
         # Provider/network errors, unparseable tool calls, or a bug: an operator
-        # mid-incident must still get an answer. Logged so bugs don't hide.
+        # mid-incident must still get an answer - and must see why it's the
+        # offline one. Every fallback names its cause, in the UI and the log.
         kind = _error_kind(e)
-        detail = _error_detail(e)
-        print(f"  [{llm.provider} {kind} ({type(e).__name__}: {e}) - falling back to keyword-based routing]")
+        detail = _error_detail(e) or f"{type(e).__name__}: {_short(e)}"
+        body = getattr(e, "body", None)
+        err = body.get("error") if isinstance(body, dict) else None
+        provider_says = err.get("message") if isinstance(err, dict) else None
+        log_line = f"{type(e).__name__}: {_short(e, 300)}"
+        if provider_says:
+            log_line += f" | {llm.provider} says: {_short(provider_says, 300)}"
+        _log_fallback(llm, kind, log_line, with_traceback=(kind == "error"))
         messages = {
             "unavailable": f"The {llm.provider} model is unavailable right now",
             "unparseable": "The model returned an unreadable tool call",
             "error": "The coordinator hit an unexpected error",
         }
-        reason = messages[kind] + (f" ({detail})" if detail else "")
-        yield from fall_back(reason + "; showing the offline agent summary instead.")
+        yield from fall_back(f"{messages[kind]} ({detail}); showing the offline agent summary instead.")
+
+
+# Anything shaped like an API key is masked before a message is logged or
+# shown - provider errors don't normally echo keys, but never rely on that.
+_KEY_PATTERN = re.compile(r"\b(gsk_|sk-ant-|sk-)[A-Za-z0-9_\-]{8,}")
+
+
+def _short(e, limit=160):
+    text = " ".join(str(e).split()) or "(no message)"
+    text = _KEY_PATTERN.sub(lambda m: m.group(1) + "[redacted]", text)
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def _log_fallback(llm, kind, message, with_traceback=False):
+    print(f"  [{llm.provider} fallback: {kind}] {message} - answered with offline keyword routing", flush=True)
+    if with_traceback:
+        tb = _KEY_PATTERN.sub(lambda m: m.group(1) + "[redacted]", traceback.format_exc())
+        print(tb, flush=True)
 
 
 def _error_kind(e):
