@@ -2,11 +2,13 @@ import os
 import threading
 import time
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response
+
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 from flask_socketio import SocketIO, disconnect, emit
+
 from aegis_core.building_state import BuildingDigitalTwin
-from aegis_core.emergency_nlp import parse_emergency_report
 from aegis_core.coordinator import ask_coordinator, get_client, init_agents
+from aegis_core.emergency_nlp import parse_emergency_report
 from aegis_core.sensor_state import SensorFusionState
 from aegis_core.system import AegisSystem
 

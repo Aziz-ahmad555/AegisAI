@@ -1,6 +1,7 @@
-import networkx as nx
-import time
 import threading
+import time
+
+import networkx as nx
 
 
 class BuildingDigitalTwin:

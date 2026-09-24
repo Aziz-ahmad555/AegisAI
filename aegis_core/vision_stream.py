@@ -233,7 +233,7 @@ class VisionStream:
         fire = smoke = 0.0
         if fire_detected:
             names = results[0].names
-            for c, s in zip(results[0].boxes.cls.tolist(), results[0].boxes.conf.tolist()):
+            for c, s in zip(results[0].boxes.cls.tolist(), results[0].boxes.conf.tolist(), strict=True):
                 if names[int(c)].lower() == "fire":
                     fire = max(fire, s)
                 else:
@@ -253,7 +253,7 @@ class VisionStream:
         for r in results:
             if r.keypoints is None or r.keypoints.conf is None:
                 continue
-            for kpts_xy, kpts_conf in zip(r.keypoints.xy, r.keypoints.conf):
+            for kpts_xy, kpts_conf in zip(r.keypoints.xy, r.keypoints.conf, strict=True):
                 if len(kpts_xy) < 17:
                     continue
                 needed = [5, 6, 11, 12]
@@ -325,7 +325,7 @@ class VisionStream:
 
         while self._running:
             with self.lock:
-                self._frame_ready.wait_for(lambda: self._frame_id != last_id or not self._running, timeout=1.0)
+                self._frame_ready.wait_for(lambda seen=last_id: self._frame_id != seen or not self._running, timeout=1.0)
                 if self._frame_id == last_id:
                     continue
                 frame, last_id, captured_at = self._frame, self._frame_id, self._frame_time
@@ -407,7 +407,7 @@ class VisionStream:
             while True:
                 with self.lock:
                     self._jpeg_ready.wait_for(
-                        lambda: self._jpeg_id != last_id or not self.camera_available, timeout=2.0
+                        lambda seen=last_id: self._jpeg_id != seen or not self.camera_available, timeout=2.0
                     )
                     if not self.camera_available:
                         frame = self._placeholder_jpeg

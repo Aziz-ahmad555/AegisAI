@@ -92,7 +92,8 @@ def test_trend_classification(series, trend):
 
 def test_trend_needs_three_points_and_predicts_next():
     t = TrendPredictor()
-    t.update(10); t.update(20)
+    t.update(10)
+    t.update(20)
     assert t.get_trend()["trend"] == "INSUFFICIENT_DATA"
     t.update(30)
     assert t.get_trend()["predicted_next"] == 40.0

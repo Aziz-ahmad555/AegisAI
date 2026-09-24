@@ -1,0 +1,5 @@
+# Test + lint tooling (CI and local). Install alongside requirements.txt or
+# requirements-cloud.txt, then `pip install -e .` from the repo root.
+pytest==9.1.1
+ruff==0.16.8
+pre-commit

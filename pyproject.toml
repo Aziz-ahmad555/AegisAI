@@ -16,3 +16,14 @@ packages = ["aegis_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["command_center/tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["archive", "**/venv"]
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle errors/warnings, bugbear, import order
+select = ["F", "E", "W", "B", "I"]
+# Long lines here are human-readable strings (prompts, tool descriptions, messages).
+ignore = ["E501"]

@@ -1,9 +1,10 @@
 import threading
 import time
 from collections import deque
-from .sensor_simulator import SensorSimulator
-from .fusion_engine import compute_risk_score, classify_risk
+
 from .anomaly_detector import AnomalyDetector
+from .fusion_engine import classify_risk, compute_risk_score
+from .sensor_simulator import SensorSimulator
 from .trend_predictor import TrendPredictor
 
 

@@ -89,7 +89,7 @@ def evaluate(model_path, imgsz, frames, conf, out_dir):
         r = model.predict(frame, imgsz=imgsz, conf=conf, verbose=False)[0]
         times.append((time.perf_counter() - t) * 1000)
         frame_best = {}
-        for c, s in zip(r.boxes.cls.tolist(), r.boxes.conf.tolist()):
+        for c, s in zip(r.boxes.cls.tolist(), r.boxes.conf.tolist(), strict=True):
             name = r.names[int(c)]
             frame_best[name] = max(s, frame_best.get(name, 0.0))
         for name, s in frame_best.items():
@@ -140,7 +140,7 @@ def main():
           f"min {min(levels):.1f} max {max(levels):.1f} (/255)")
     # Black frames can't contain detections and would skew hit rates, so they
     # are excluded from the analysis (and reported). All raw frames are saved.
-    lit = [f for f, b in zip(frames, levels) if b >= DARK_MEAN]
+    lit = [f for f, b in zip(frames, levels, strict=True) if b >= DARK_MEAN]
     if len(lit) < len(frames):
         print(f"Excluding {len(frames) - len(lit)} black frame(s) (brightness < {DARK_MEAN}); analysing {len(lit)}.")
     if not lit:

@@ -1,6 +1,7 @@
 ﻿import random
 import time
 
+
 class SensorSimulator:
     def __init__(self):
         self.baseline = {"temperature": 24.0, "smoke_level": 5.0, "gas_level": 10.0}

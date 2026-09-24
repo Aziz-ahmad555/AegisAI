@@ -1,8 +1,7 @@
 """App-level wiring: auth on HTTP + WebSocket, report -> proposal -> twin over
 the real Flask/Socket.IO stack, live agents answering through /api/chat."""
-import pytest
-
 import app as aegis
+import pytest
 
 
 @pytest.fixture
@@ -71,11 +70,13 @@ def test_route_reply_goes_only_to_requester(client):
     login(client)
     a = aegis.socketio.test_client(aegis.app, flask_test_client=client)
     b = aegis.socketio.test_client(aegis.app, flask_test_client=client)
-    a.get_received(); b.get_received()
+    a.get_received()
+    b.get_received()
     a.emit("request_route", {"start": "Room101"})
     assert any(m["name"] == "route_result" for m in a.get_received())
     assert not any(m["name"] == "route_result" for m in b.get_received())
-    a.disconnect(); b.disconnect()
+    a.disconnect()
+    b.disconnect()
 
 
 def test_invalid_socket_input_is_ignored(client):

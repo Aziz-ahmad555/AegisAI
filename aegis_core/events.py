@@ -2,8 +2,7 @@ import itertools
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field, asdict
-
+from dataclasses import asdict, dataclass, field
 
 # Event types published by the modules. Kept as plain strings so they
 # serialize straight into the timeline JSON.

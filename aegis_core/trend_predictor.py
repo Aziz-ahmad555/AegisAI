@@ -1,5 +1,7 @@
-﻿import numpy as np
-from collections import deque
+﻿from collections import deque
+
+import numpy as np
+
 
 class TrendPredictor:
     def __init__(self, window_size=10):
