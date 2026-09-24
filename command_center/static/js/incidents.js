@@ -1,0 +1,93 @@
+// Shared incident UI on every page: pending-action tray (operator confirms or
+// dismisses what the system proposes), toasts for new warnings/critical
+// events, and the live incident timeline on pages that include #timeline.
+(function () {
+    var socket = window.aegisSocket;
+    if (!socket) return;
+
+    function esc(value) {
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+    }
+    window.aegisEscape = esc;
+
+    // ----- pending actions -------------------------------------------------
+    var tray = document.createElement("div");
+    tray.id = "action-tray";
+    tray.setAttribute("aria-live", "polite");
+    document.body.appendChild(tray);
+
+    function renderActions(actions) {
+        tray.innerHTML = actions.map(function (a) {
+            var conf = a.confidence != null ? " &middot; conf " + esc(a.confidence) : "";
+            return '<div class="action-card" data-id="' + esc(a.id) + '">' +
+                '<div class="action-head">Needs confirmation <span class="action-src">' + esc(a.source) + conf + "</span></div>" +
+                '<div class="action-reason">' + esc(a.reason) + "</div>" +
+                '<div class="action-buttons">' +
+                '<button class="btn-confirm" data-approve="1">Confirm</button>' +
+                '<button class="btn-dismiss" data-approve="0">Dismiss</button>' +
+                "</div></div>";
+        }).join("");
+    }
+
+    tray.addEventListener("click", function (e) {
+        var btn = e.target.closest("button[data-approve]");
+        if (!btn) return;
+        var card = btn.closest(".action-card");
+        btn.disabled = true;
+        socket.emit("decide_action", { id: Number(card.dataset.id), approve: btn.dataset.approve === "1" });
+    });
+
+    socket.on("pending_actions", renderActions);
+
+    // ----- toasts ----------------------------------------------------------
+    var toasts = document.createElement("div");
+    toasts.id = "toast-stack";
+    toasts.setAttribute("role", "status");
+    document.body.appendChild(toasts);
+
+    function toast(event) {
+        var el = document.createElement("div");
+        el.className = "toast toast-" + event.severity;
+        el.innerHTML = '<span class="toast-src">' + esc(event.source) + "</span>" + esc(event.message);
+        toasts.appendChild(el);
+        setTimeout(function () { el.classList.add("toast-out"); }, 5000);
+        setTimeout(function () { el.remove(); }, 5600);
+    }
+
+    // ----- timeline --------------------------------------------------------
+    var timelineEl = document.getElementById("timeline");
+
+    function row(e) {
+        var conf = e.confidence != null ? '<span class="tl-conf">conf ' + esc(e.confidence) + "</span>" : "";
+        var zone = e.zone ? '<span class="tl-zone">' + esc(e.zone) + "</span>" : "";
+        return '<div class="tl-row tl-' + esc(e.severity) + '">' +
+            '<span class="tl-time">' + esc(e.time) + "</span>" +
+            '<span class="tl-src">' + esc(e.source) + "</span>" +
+            '<span class="tl-msg">' + esc(e.message) + "</span>" + zone + conf + "</div>";
+    }
+
+    function renderTimeline(events) {
+        if (!timelineEl) return;
+        timelineEl.innerHTML = events.length
+            ? events.map(row).join("")
+            : '<div class="tl-empty">No incidents yet. Trigger a hazard, sensor event or report to see it here.</div>';
+    }
+
+    socket.on("timeline", renderTimeline);
+    socket.on("timeline_event", function (e) {
+        if (timelineEl) {
+            var empty = timelineEl.querySelector(".tl-empty");
+            if (empty) empty.remove();
+            timelineEl.insertAdjacentHTML("afterbegin", row(e));
+            while (timelineEl.children.length > 100) timelineEl.lastChild.remove();
+        }
+        if (e.severity !== "info") toast(e);
+    });
+
+    // ----- connection state --------------------------------------------------
+    var dot = document.querySelector("#sidebar .brand .dot");
+    socket.on("connect", function () { if (dot) dot.classList.remove("offline"); });
+    socket.on("disconnect", function () { if (dot) dot.classList.add("offline"); });
+})();

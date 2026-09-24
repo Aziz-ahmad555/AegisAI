@@ -10,9 +10,9 @@ from trend_predictor import TrendPredictor
 class SensorFusionState:
     """
     Live, continuously-updating multimodal sensor fusion state.
-    Combines simulated IoT sensor readings with a (currently zero, since no
-    live camera feed is wired into this section yet) camera confidence input
-    into a single fused risk score, with rolling anomaly detection and trend
+    Combines simulated IoT sensor readings with Live Vision's fire/smoke
+    confidence (when the camera is running in fire/smoke mode) into a single
+    fused risk score, with rolling anomaly detection and trend
     forecasting layered on top - directly mirroring Phases 4 and 5.
     """
 
@@ -31,10 +31,12 @@ class SensorFusionState:
         self.anomaly_hold_until = 0
         self.ANOMALY_HOLD_SECONDS = 4
 
+        self.latest_camera = {"fire": 0.0, "smoke": 0.0}
         self._running = False
 
     def update_once(self, camera_fire_conf=0.0, camera_smoke_conf=0.0):
         with self.lock:
+            self.latest_camera = {"fire": round(camera_fire_conf, 2), "smoke": round(camera_smoke_conf, 2)}
             # Disable the simulator's built-in random auto-trigger for this
             # dashboard - a portfolio demo should behave deterministically so
             # every viewing session is controllable and predictable via the
@@ -78,16 +80,29 @@ class SensorFusionState:
                 "risk_level": self.latest_risk_level,
                 "trend": self.latest_trend,
                 "risk_history": list(self.risk_history),
+                "camera": dict(self.latest_camera),
             }
 
-    def start_background_loop(self, interval_seconds=1.0):
+    def start_background_loop(self, interval_seconds=1.0, camera_provider=None, on_update=None):
+        """
+        camera_provider: callable -> (fire_conf, smoke_conf) from Live Vision,
+            fused into the risk score alongside the sensors.
+        on_update: callable(snapshot) run after every reading (e.g. to push
+            risk into the digital twin and raise timeline events).
+        """
         if self._running:
             return
         self._running = True
 
         def loop():
             while True:
-                self.update_once()
+                fire, smoke = camera_provider() if camera_provider else (0.0, 0.0)
+                self.update_once(camera_fire_conf=fire, camera_smoke_conf=smoke)
+                if on_update:
+                    try:
+                        on_update(self.get_snapshot())
+                    except Exception as e:
+                        print(f"[sensors] on_update failed: {e}")
                 time.sleep(interval_seconds)
 
         t = threading.Thread(target=loop, daemon=True)

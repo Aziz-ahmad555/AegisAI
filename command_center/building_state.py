@@ -16,6 +16,7 @@ class BuildingDigitalTwin:
         self.exits = ["ExitMain", "ExitEmergency"]
         self.lock = threading.RLock()
         self.event_log = []
+        self.fire_since = {}
 
     def _build_graph(self):
         G = nx.Graph()
@@ -55,6 +56,7 @@ class BuildingDigitalTwin:
                 return False
             self.zone_status[zone] = "FIRE"
             self.zone_risk[zone] = 85.0
+            self.fire_since[zone] = time.time()
             self.log_event(f"FIRE detected in {zone}")
             return True
 
@@ -64,8 +66,17 @@ class BuildingDigitalTwin:
                 return False
             self.zone_status[zone] = "SAFE"
             self.zone_risk[zone] = 0.0
+            self.fire_since.pop(zone, None)
             self.log_event(f"{zone} confirmed clear")
             return True
+
+    def set_zone_risk(self, zone, risk):
+        # Risk from monitoring (e.g. fused sensor score) without declaring a
+        # fire: it shows on the map and in the overall score but does not
+        # block routes - only a declared FIRE does.
+        with self.lock:
+            if zone in self.zone_risk and self.zone_status.get(zone) != "FIRE":
+                self.zone_risk[zone] = round(float(risk), 1)
 
     def get_blocked_edges(self):
         with self.lock:

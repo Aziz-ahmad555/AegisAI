@@ -3,11 +3,12 @@ import threading
 import time
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, Response
-from flask_socketio import SocketIO, disconnect
+from flask_socketio import SocketIO, disconnect, emit
 from building_state import BuildingDigitalTwin
 from emergency_nlp import parse_emergency_report
-from coordinator import ask_coordinator, get_client
+from coordinator import ask_coordinator, get_client, init_agents
 from sensor_state import SensorFusionState
+from system import AegisSystem
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
@@ -16,7 +17,7 @@ app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command
 # whole server - video stream, WebSocket pushes and page loads - until it
 # finished. PyTorch and OpenCV release the GIL during inference, so plain
 # threads let vision and the web server genuinely run in parallel.
-# Production: gunicorn -k gthread -w 1 --threads 16 app:app
+# Production: see "Production server" in ROADMAP.md (gunicorn gthread, 1 worker).
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # When true (set via env var on the hosted deployment), Live Vision is hidden
@@ -37,6 +38,11 @@ else:
     # Imported lazily so hosted deployments never pull in torch/ultralytics.
     from vision_stream import VisionStream
     vision = VisionStream()
+
+# One object wiring the modules together (camera -> fusion -> twin, reports
+# -> proposed actions, everything -> incident timeline); agents read it live.
+system = AegisSystem(twin, sensors, vision)
+init_agents(system)
 
 
 @app.context_processor
@@ -153,7 +159,27 @@ def api_analyze_report():
     if not text.strip():
         return jsonify({"error": "No text provided"}), 400
     result = parse_emergency_report(text)
+    linked = system.ingest_report(result)
+    result["zones"] = linked["zones"]
+    result["proposals"] = linked["proposals"]
     return jsonify(result)
+
+
+@app.route("/api/timeline")
+@login_required
+def api_timeline():
+    return jsonify({"events": system.bus.timeline(limit=100), "pending_actions": system.pending_actions()})
+
+
+@app.route("/api/actions/<int:proposal_id>", methods=["POST"])
+@login_required
+def api_decide_action(proposal_id):
+    data = request.get_json(force=True) or {}
+    decided = system.decide(proposal_id, bool(data.get("approve")))
+    if decided is None:
+        return jsonify({"error": "No such pending action (already decided?)"}), 404
+    broadcast_twin_state()
+    return jsonify({"decided": decided, "approved": bool(data.get("approve"))})
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -177,25 +203,39 @@ AERIAL_SAMPLES = [
 ]
 
 
-# --- Digital Twin WebSocket handlers ---
+# --- WebSocket handlers ---
 
 def broadcast_twin_state():
-    snapshot = twin.get_state_snapshot()
-    socketio.emit("state_update", snapshot)
+    socketio.emit("state_update", twin.get_state_snapshot())
 
 
 def broadcast_sensor_state():
-    snapshot = sensors.get_snapshot()
-    socketio.emit("sensor_update", snapshot)
+    socketio.emit("sensor_update", sensors.get_snapshot())
+
+
+def _push_event(event):
+    # Every timeline event goes to every connected operator immediately, plus
+    # the current pending-action list so confirm/dismiss controls stay in sync.
+    socketio.emit("timeline_event", event.to_dict())
+    socketio.emit("pending_actions", system.pending_actions())
+
+
+system.bus.subscribe(_push_event)
 
 
 @socketio.on("connect")
-def handle_connect():
+def handle_connect(auth=None):
     if not session.get("logged_in"):
-        disconnect()
-        return
-    broadcast_twin_state()
-    broadcast_sensor_state()
+        # Refuse the handshake itself. Calling disconnect() here doesn't
+        # reliably drop a connection that is still being established under a
+        # real server (verified under gunicorn): the client stayed connected
+        # and received every broadcast.
+        raise ConnectionRefusedError("unauthorized")
+    # Initial state goes to the connecting client only, not everyone.
+    emit("state_update", twin.get_state_snapshot())
+    emit("sensor_update", sensors.get_snapshot())
+    emit("timeline", system.bus.timeline(limit=50))
+    emit("pending_actions", system.pending_actions())
 
 
 @socketio.on("trigger_fire")
@@ -203,9 +243,8 @@ def handle_trigger_fire(data):
     if not session.get("logged_in"):
         disconnect()
         return
-    zone = data.get("zone")
-    if zone:
-        twin.start_fire(zone)
+    zone = (data or {}).get("zone")
+    if zone and system.start_fire(zone, source="operator"):
         broadcast_twin_state()
 
 
@@ -214,9 +253,8 @@ def handle_clear_zone(data):
     if not session.get("logged_in"):
         disconnect()
         return
-    zone = data.get("zone")
-    if zone:
-        twin.clear_zone(zone)
+    zone = (data or {}).get("zone")
+    if zone and system.clear_zone(zone, source="operator"):
         broadcast_twin_state()
 
 
@@ -225,9 +263,24 @@ def handle_request_route(data):
     if not session.get("logged_in"):
         disconnect()
         return
-    start = data.get("start", "Room101")
-    route = twin.compute_evacuation_route(start)
-    socketio.emit("route_result", {"start": start, "route": route})
+    start = (data or {}).get("start", "Room101")
+    if start not in system.zones():
+        return
+    # Reply to the operator who asked, not to every connected client.
+    emit("route_result", {"start": start, "route": twin.compute_evacuation_route(start)})
+
+
+@socketio.on("decide_action")
+def handle_decide_action(data):
+    if not session.get("logged_in"):
+        disconnect()
+        return
+    try:
+        proposal_id = int((data or {}).get("id"))
+    except (TypeError, ValueError):
+        return
+    if system.decide(proposal_id, bool(data.get("approve"))) is not None:
+        broadcast_twin_state()
 
 
 @socketio.on("trigger_sensor_event")
@@ -248,7 +301,11 @@ def periodic_broadcast():
 # Start background loops at import time, not just under __main__, so they
 # also run correctly under a production WSGI server (gunicorn) which imports
 # this module directly rather than executing it as a script.
-sensors.start_background_loop(interval_seconds=1.0)
+sensors.start_background_loop(
+    interval_seconds=1.0,
+    camera_provider=system.camera_confidence,
+    on_update=system.on_sensor_update,
+)
 _broadcaster_thread = threading.Thread(target=periodic_broadcast, daemon=True)
 _broadcaster_thread.start()
 

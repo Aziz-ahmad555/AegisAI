@@ -77,10 +77,9 @@
     </div>
 </div>
 
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-    var socket = io();
+    var socket = window.aegisSocket;
 
     var ctx = document.getElementById("risk-chart").getContext("2d");
     var riskChart = new Chart(ctx, {

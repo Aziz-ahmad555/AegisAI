@@ -1,13 +1,20 @@
-﻿import os
+import os
 import json
 import anthropic
 from agents import FireAgent, MedicalAgent, RouteAgent
 
 MODEL = "claude-sonnet-4-5"
 
-fire_agent = FireAgent()
-medical_agent = MedicalAgent()
-route_agent = RouteAgent()
+# Set by init_agents() once the live system exists; the agents read the
+# real digital twin, sensor fusion, camera and report state through it.
+fire_agent = medical_agent = route_agent = None
+
+
+def init_agents(system):
+    global fire_agent, medical_agent, route_agent
+    fire_agent = FireAgent(system)
+    medical_agent = MedicalAgent(system)
+    route_agent = RouteAgent(system)
 
 AGENT_TOOLS = [
     {
@@ -28,7 +35,7 @@ AGENT_TOOLS = [
 ]
 
 AGENT_FUNCTIONS = {
-    "consult_fire_agent": lambda: fire_agent.get_status(),
+    "consult_fire_agent": lambda: fire_agent.get_status(),  # resolved at call time, after init_agents()
     "consult_medical_agent": lambda: medical_agent.get_status(),
     "consult_route_agent": lambda: route_agent.get_status(),
 }
@@ -45,6 +52,7 @@ Rules:
 - Synthesize their responses into a single clear, operational answer for the operator.
 - If multiple agents are relevant, explain how their information relates (e.g., "the fire in Corridor A is why the route is blocked, and why 3 people are trapped nearby").
 - Be concise. This is for live emergency operations, not casual conversation.
+- Only state what the agents' data shows. If a value is null/unknown or marked unverified, say so - never fill gaps with assumptions.
 """
 
 # Simple keyword routing used ONLY when the LLM coordinator is unavailable.
@@ -130,7 +138,12 @@ def ask_coordinator(question, client):
 
 
 if __name__ == "__main__":
-    print("AegisAI Phase 11 - Multi-Agent Command Coordinator")
+    from building_state import BuildingDigitalTwin
+    from sensor_state import SensorFusionState
+    from system import AegisSystem
+
+    init_agents(AegisSystem(BuildingDigitalTwin(), SensorFusionState()))
+    print("AegisAI Multi-Agent Command Coordinator (standalone: fresh, empty system state)")
     print("Ask questions. The coordinator will consult only the relevant specialist agents. Type 'quit' to exit.\n")
 
     client = get_client()

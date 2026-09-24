@@ -138,6 +138,8 @@ class VisionStream:
         self._jpeg_ready = threading.Condition(self.lock)
 
         self._info = {"mode": self.mode, "detail": "Starting camera...", "fps": 0.0, "latency_ms": 0}
+        # Latest fire/smoke confidences for sensor fusion, with their time.
+        self._fire_smoke = (0.0, 0.0, 0.0)
         self._placeholder_jpeg = self._build_placeholder()
 
     # ----- viewers ---------------------------------------------------------
@@ -221,6 +223,16 @@ class VisionStream:
         results = self.fire_model(frame, imgsz=self.INFER_SIZE, conf=0.55, verbose=False)
         annotated = results[0].plot()
         fire_detected = results[0].boxes is not None and len(results[0].boxes) > 0
+        fire = smoke = 0.0
+        if fire_detected:
+            names = results[0].names
+            for c, s in zip(results[0].boxes.cls.tolist(), results[0].boxes.conf.tolist()):
+                if names[int(c)].lower() == "fire":
+                    fire = max(fire, s)
+                else:
+                    smoke = max(smoke, s)
+        with self.lock:
+            self._fire_smoke = (fire, smoke, time.time())
         label = "FIRE/SMOKE DETECTED" if fire_detected else "Zone clear"
         color = (0, 0, 255) if fire_detected else (0, 255, 0)
         _draw_status(annotated, label, color)
@@ -367,6 +379,15 @@ class VisionStream:
             if not self.camera_available:
                 return self._placeholder_jpeg
             return self._jpeg
+
+    def latest_fire_smoke(self, max_age=1.5):
+        """(fire, smoke) confidence from the fire/smoke model; zeros if the
+        camera isn't in that mode or the last result is stale."""
+        with self.lock:
+            fire, smoke, ts = self._fire_smoke
+            if self.mode != "fire_smoke" or time.time() - ts > max_age:
+                return 0.0, 0.0
+            return fire, smoke
 
     def get_info(self):
         with self.lock:

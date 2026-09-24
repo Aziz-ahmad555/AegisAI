@@ -98,18 +98,26 @@
     }
 
     function renderResults(data) {
+        var esc = window.aegisEscape;
         var eventTags = data.event_types.map(function(e) {
-            return '<span class="tag">' + e + '</span>';
+            return '<span class="tag">' + esc(e) + '</span>';
         }).join("");
 
-        var locations = data.locations.length > 0 ? data.locations.join(", ") : "None detected";
-        var peopleCount = data.people_count !== null ? data.people_count : "Not specified";
+        var locations = data.locations.length > 0 ? esc(data.locations.join(", ")) : "None detected";
+        var peopleCount = data.people_count !== null ? esc(data.people_count) : "Not specified";
+        var zones = data.zones && data.zones.length ? esc(data.zones.join(", ")) : "No matching building zone";
+        var proposals = data.proposals && data.proposals.length
+            ? data.proposals.map(function(p) { return esc(p.reason); }).join("<br>") +
+              '<div style="color: var(--text-faint); font-size: 0.85em; margin-top: 4px;">Awaiting operator confirmation (bottom-right).</div>'
+            : "None - report recorded on the incident timeline";
 
         var html = "";
         html += '<div class="result-row"><div class="result-label">Event type</div><div class="result-value">' + eventTags + '</div></div>';
-        html += '<div class="result-row"><div class="result-label">Severity</div><div class="result-value severity-' + data.severity + '">' + data.severity + '</div></div>';
+        html += '<div class="result-row"><div class="result-label">Severity</div><div class="result-value severity-' + esc(data.severity) + '">' + esc(data.severity) + '</div></div>';
         html += '<div class="result-row"><div class="result-label">Locations</div><div class="result-value">' + locations + '</div></div>';
         html += '<div class="result-row"><div class="result-label">People count</div><div class="result-value">' + peopleCount + '</div></div>';
+        html += '<div class="result-row"><div class="result-label">Building zone</div><div class="result-value">' + zones + '</div></div>';
+        html += '<div class="result-row"><div class="result-label">Proposed action</div><div class="result-value">' + proposals + '</div></div>';
 
         document.getElementById("results").innerHTML = html;
     }
