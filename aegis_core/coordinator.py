@@ -4,6 +4,7 @@ import anthropic
 from .agents import FireAgent, MedicalAgent, RouteAgent
 
 MODEL = "claude-sonnet-4-5"
+MAX_TOOL_ROUNDS = 5
 
 # Set by init_agents() once the live system exists; the agents read the
 # real digital twin, sensor fusion, camera and report state through it.
@@ -106,7 +107,9 @@ def ask_coordinator(question, client):
     messages = [{"role": "user", "content": question}]
 
     try:
-        while True:
+        # Bounded: a model that keeps requesting tools must not loop (and bill)
+        # forever. Three agents exist, so a handful of rounds is plenty.
+        for _ in range(MAX_TOOL_ROUNDS):
             response = client.messages.create(
                 model=MODEL,
                 max_tokens=1024,
@@ -131,6 +134,9 @@ def ask_coordinator(question, client):
                 messages.append({"role": "user", "content": tool_results})
             else:
                 return "".join(b.text for b in response.content if b.type == "text")
+
+        print(f"  [Coordinator exceeded {MAX_TOOL_ROUNDS} tool rounds - falling back to keyword-based routing]")
+        return offline_selective_summary(question)
 
     except Exception as e:
         print(f"  [LLM unavailable ({e}) - falling back to keyword-based routing]")

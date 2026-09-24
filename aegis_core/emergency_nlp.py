@@ -6,14 +6,16 @@ nlp = spacy.load("en_core_web_sm")
 EVENT_KEYWORDS = {
     "FIRE": ["fire", "flame", "flames", "burning", "visible smoke", "smoke coming from", "smoke billowing"],
     "POSSIBLE_FIRE": ["smoke smell", "smell of smoke", "smells like smoke", "smoky smell"],
-    "FLOOD": ["flood", "flooding", "water rising", "submerged"],
+    "FLOOD": ["flood", "flooding", "flooded", "water rising", "water is rising", "rising water", "submerged"],
     "MEDICAL": ["injured", "unconscious", "bleeding", "heart attack", "someone collapsed", "person collapsed"],
     "STRUCTURAL": ["building has collapsed", "building collapsed", "cracked", "structural damage", "debris"],
     "TRAPPED": ["trapped", "stuck", "can't get out", "blocked in"],
 }
 
 SEVERITY_KEYWORDS = {
-    "CRITICAL": ["trapped", "unconscious", "dying", "critical", "severe", "collapsed"],
+    # Every TRAPPED phrasing is critical, not just the word "trapped" -
+    # otherwise "12 people stuck in the elevator" came out LOW.
+    "CRITICAL": ["trapped", "stuck", "can't get out", "blocked in", "unconscious", "dying", "critical", "severe", "collapsed"],
     "HIGH": ["injured", "bleeding", "fire", "spreading", "visible smoke", "smoke coming from"],
     "MODERATE": ["concerned", "worried", "smell", "smoke smell"],
 }

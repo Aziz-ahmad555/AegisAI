@@ -10,3 +10,4 @@ archive/phases/phase7_drone_intelligence/runs/
 .claude/
 .env
 command_center/diagnostics/
+*.egg-info/
