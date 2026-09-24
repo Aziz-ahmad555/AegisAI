@@ -233,13 +233,15 @@ def iter_coordinator(question, llm, history=None):
         # Provider/network errors, unparseable tool calls, or a bug: an operator
         # mid-incident must still get an answer. Logged so bugs don't hide.
         kind = _error_kind(e)
+        detail = _error_detail(e)
         print(f"  [{llm.provider} {kind} ({type(e).__name__}: {e}) - falling back to keyword-based routing]")
         messages = {
             "unavailable": f"The {llm.provider} model is unavailable right now",
             "unparseable": "The model returned an unreadable tool call",
             "error": "The coordinator hit an unexpected error",
         }
-        yield from fall_back(messages[kind] + "; showing the offline agent summary instead.")
+        reason = messages[kind] + (f" ({detail})" if detail else "")
+        yield from fall_back(reason + "; showing the offline agent summary instead.")
 
 
 def _error_kind(e):
@@ -255,6 +257,39 @@ def _error_kind(e):
     if isinstance(e, ValueError):
         return "unparseable"
     return "error"
+
+
+_STATUS_HINTS = {
+    401: "API key rejected - check the key",
+    403: "key not permitted to use this model",
+    404: "model not found - check the model id",
+    413: "request too large",
+    429: "rate limited - wait and retry",
+}
+
+
+def _error_detail(e):
+    """Short operator-facing reason: HTTP status + provider error code, or the
+    network failure type. Never includes request data or credentials."""
+    status = getattr(e, "status_code", None)
+    if isinstance(status, int):
+        body = getattr(e, "body", None)
+        err = body.get("error") if isinstance(body, dict) else None
+        code = (err.get("code") or err.get("type")) if isinstance(err, dict) else None
+        parts = [f"HTTP {status}"]
+        if isinstance(code, str) and code.replace("_", "").isalnum():
+            parts.append(code)
+        if status in _STATUS_HINTS:
+            parts.append(_STATUS_HINTS[status])
+        elif status >= 500:
+            parts.append("provider-side error")
+        return ": ".join(parts[:2]) + (f" - {parts[2]}" if len(parts) > 2 else "")
+    name = type(e).__name__
+    if "Timeout" in name:
+        return "request timed out"
+    if "Connection" in name:
+        return "network connection failed"
+    return None
 
 
 def _claude_rounds(llm, question, history, state):
