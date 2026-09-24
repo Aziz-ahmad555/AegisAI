@@ -248,11 +248,13 @@ def test_no_supported_model_means_offline_with_reason(monkeypatch):
 
 
 def test_model_list_failure_keeps_default_and_says_why(monkeypatch):
-    err = _status_error(401, {"error": {"message": "Invalid API Key", "code": "invalid_api_key"}})
+    # A transient provider problem (not an auth failure) keeps the default
+    # model and says why; chat requests then report their own errors.
+    err = _status_error(503, {"error": {"message": "over capacity", "code": "service_unavailable"}})
     monkeypatch.setattr(groq_sdk, "Groq", lambda **kw: FakeModels(error=err))
     llm, description = coordinator.get_llm({"GROQ_API_KEY": FAKE_KEY})
     assert llm.model == coordinator.GROQ_MODEL_PREFERENCE[0]
-    assert "model list unavailable: HTTP 401: invalid_api_key" in description
+    assert "model list unavailable: HTTP 503: service_unavailable" in description
     assert FAKE_KEY not in description
 
 
@@ -313,3 +315,26 @@ def test_provider_error_log_line_has_type_and_message(capsys):
     assert "HTTP 429" in _notice(events)
     out = capsys.readouterr().out
     assert "[groq fallback: unavailable] RateLimitError" in out and "Rate limit reached" in out
+
+
+# --- rejected / mangled keys -------------------------------------------------------------
+
+def test_key_rejected_at_startup_means_offline_not_connected(monkeypatch):
+    err = _status_error(401, {"error": {"message": "Invalid API Key", "code": "invalid_api_key"}})
+    monkeypatch.setattr(groq_sdk, "Groq", lambda **kw: FakeModels(error=err))
+    llm, description = coordinator.get_llm({"GROQ_API_KEY": FAKE_KEY})
+    assert llm is None
+    assert description.startswith("offline (groq: API key rejected (HTTP 401: invalid_api_key")
+    assert FAKE_KEY not in description
+
+
+@pytest.mark.parametrize("raw", [f"  {FAKE_KEY}\n", f"'{FAKE_KEY}'", f'"{FAKE_KEY}"', f" '{FAKE_KEY}' "])
+def test_whitespace_and_quotes_around_the_key_are_stripped(monkeypatch, raw):
+    seen = {}
+
+    def fake_groq(**kw):
+        seen["key"] = kw["api_key"]
+        return FakeModels(["openai/gpt-oss-120b"])
+    monkeypatch.setattr(groq_sdk, "Groq", fake_groq)
+    llm, _ = coordinator.get_llm({"GROQ_API_KEY": raw})
+    assert llm is not None and seen["key"] == FAKE_KEY

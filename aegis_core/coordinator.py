@@ -72,6 +72,11 @@ class LLM:
 def get_llm(env=None):
     """Pick the chat provider from the environment. Returns (LLM or None, description)."""
     env = os.environ if env is None else env
+    # Keys never contain whitespace or quotes; a stray space/newline or quotes
+    # from a copy-paste (e.g. $env:GROQ_API_KEY = "'gsk_...'") would otherwise
+    # be sent verbatim and rejected with a confusing 401.
+    env = {k: (v.strip().strip("'\"").strip() if k in ("GROQ_API_KEY", "ANTHROPIC_API_KEY") and isinstance(v, str) else v)
+           for k, v in env.items()}
     requested = (env.get("AEGISAI_LLM_PROVIDER") or "").strip().lower()
     if requested and requested not in PROVIDERS:
         return None, f"offline (unknown AEGISAI_LLM_PROVIDER {requested!r}; use groq, claude or offline)"
@@ -117,6 +122,10 @@ def resolve_groq_model(client, pinned=None):
     try:
         available = {m.id for m in client.models.list(timeout=10.0).data}
     except Exception as e:
+        if getattr(e, "status_code", None) in (401, 403):
+            # The key itself was refused: don't show "connected" and then
+            # fail every chat request - go offline and say why.
+            return None, f"API key rejected ({_error_detail(e)})"
         return pinned or GROQ_MODEL_PREFERENCE[0], f" (model list unavailable: {_error_detail(e) or type(e).__name__})"
     if pinned:
         if pinned in available:
