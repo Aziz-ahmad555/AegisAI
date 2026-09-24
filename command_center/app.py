@@ -8,7 +8,6 @@ from building_state import BuildingDigitalTwin
 from emergency_nlp import parse_emergency_report
 from coordinator import ask_coordinator, get_client
 from sensor_state import SensorFusionState
-from vision_stream import VisionStream
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("AEGISAI_SECRET_KEY", "aegisai-command-center-demo-key")
@@ -32,7 +31,12 @@ OPERATOR_PASSWORD = os.environ.get("AEGISAI_PASSWORD", "aegisai2026")
 twin = BuildingDigitalTwin()
 llm_client = get_client()
 sensors = SensorFusionState()
-vision = None if CLOUD_MODE else VisionStream()
+if CLOUD_MODE:
+    vision = None
+else:
+    # Imported lazily so hosted deployments never pull in torch/ultralytics.
+    from vision_stream import VisionStream
+    vision = VisionStream()
 
 
 @app.context_processor

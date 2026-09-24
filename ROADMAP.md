@@ -14,23 +14,24 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - Capture, inference, and streaming all run in one loop with a fixed sleep, so the slowest step dictates the latency of everything.
 
 Tasks:
-- [ ] Drop eventlet; use Flask-SocketIO `threading` mode (real OS threads; inference releases the GIL in PyTorch/OpenCV).
-- [ ] Split vision into a **grabber thread** (reads the camera continuously, keeps only the newest frame, buffer size 1) and an **inference thread** (always processes the newest frame, drops stale ones).
-- [ ] The MJPEG generator waits on a frame-ready condition instead of a fixed sleep, so new frames go out immediately.
-- [ ] Cap PyTorch threads so inference doesn't starve the web server; warm up models at startup so the first frame isn't slow.
-- [ ] Show live FPS + end-to-end latency in the vision status line (measured, not guessed).
+- [x] Drop eventlet; use Flask-SocketIO `threading` mode (real OS threads; inference releases the GIL in PyTorch/OpenCV).
+- [x] Split vision into a **grabber thread** (reads the camera continuously, keeps only the newest frame, buffer size 1) and an **inference thread** (always processes the newest frame, drops stale ones).
+- [x] The MJPEG generator waits on a frame-ready condition instead of a fixed sleep, so new frames go out immediately.
+- [x] Cap PyTorch threads so inference doesn't starve the web server; warm up models at startup so the first frame isn't slow.
+- [x] Show live FPS + end-to-end latency in the vision status line (measured, not guessed).
 - [ ] Serve static assets with cache headers; self-host / preconnect fonts; defer non-critical JS.
 - [ ] Only broadcast state over WebSocket when it actually changed (twin) and throttle sensor broadcasts per page.
 - [ ] Lazy-load heavy page components (3D hero on Overview) so first paint is instant.
+- [x] Cloud mode never imports the vision stack (lazy import)
 - [ ] Production server config: `gunicorn` with threaded worker (`gthread`), single worker (shared in-memory state).
 
 ## Stage 1 — Repository hygiene
 
-- [ ] Restore the main `README.md` to the repo root (it was moved into `phase1_vision/` by the restructure commit).
-- [ ] Untrack committed datasets (`FIRE-n-SMOKE-DETECTION-1/` images, `roboflow.zip`, SARD files) that `.gitignore` already intends to exclude.
-- [ ] Re-encode `requirements.txt` as UTF-8 (it's UTF-16) and split: `requirements.txt` (full, local w/ vision) and `requirements-cloud.txt` (no torch/ultralytics).
-- [ ] Remove stray debug/output files (`phase10_digital_twin/output.txt`, `result.txt`, `debug_test.py`).
-- [ ] Add `.env.example` documenting every env var.
+- [x] Restore the main `README.md` to the repo root (it was moved into `phase1_vision/` by the restructure commit).
+- [x] Datasets are no longer tracked. (They still live in old history, ~32 MB of `.git`; purging needs a history rewrite + force push — only if you want it.)
+- [x] Re-encode `requirements.txt` as UTF-8 (it's UTF-16) and split: `requirements.txt` (full, local w/ vision) and `requirements-cloud.txt` (no torch/ultralytics).
+- [x] Remove stray debug/output files (`phase10_digital_twin/output.txt`, `result.txt`, `debug_test.py`).
+- [x] Add `.env.example` documenting every env var.
 - [ ] Add `pyproject.toml` with ruff config + pre-commit hooks.
 
 ## Stage 2 — Make it one connected system (biggest credibility gain)

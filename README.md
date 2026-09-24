@@ -11,14 +11,19 @@ Inspired by how real-world smart-city and campus command centers monitor and res
 
 The fastest way to explore this project is the unified Command Center: a single authenticated web app bringing together all 11 phases into one interface - live vision, sensor fusion, digital twin routing, aerial search, report analysis, and an LLM-coordinated multi-agent chat.
 
+```
 cd command_center
 python -m venv venv
 venv\Scripts\activate
-pip install flask flask-socketio networkx opencv-python ultralytics spacy anthropic
-python -m spacy download en_core_web_sm
+pip install -r requirements.txt
 python app.py
+```
 
-Open http://127.0.0.1:5000 and log in (default operator / aegisai2026, configurable via AEGISAI_USERNAME / AEGISAI_PASSWORD). Requires the trained models copied in as fire_smoke_model.pt and an ANTHROPIC_API_KEY for full LLM-based chat routing (falls back to keyword-based routing otherwise).
+Open http://127.0.0.1:5000 and log in (default operator / aegisai2026, configurable via AEGISAI_USERNAME / AEGISAI_PASSWORD). Requires the trained models copied in as fire_smoke_model.pt and an ANTHROPIC_API_KEY for full LLM-based chat routing (falls back to keyword-based routing otherwise). All environment variables are documented in `command_center/.env.example`.
+
+For a hosted deployment without a camera, install `requirements-cloud.txt` instead (no torch/ultralytics/opencv) and set `AEGISAI_CLOUD_MODE=true`.
+
+See [ROADMAP.md](ROADMAP.md) for the ongoing polish and upgrade plan.
 
 The sections below document the individual phases as they were originally built and tested - useful for understanding the development history and running any component in isolation.
 

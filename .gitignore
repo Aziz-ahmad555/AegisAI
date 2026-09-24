@@ -8,3 +8,4 @@ phase7_drone_intelligence/Sard-4/
 phase7_drone_intelligence/runs/
 
 .claude/
+.env
