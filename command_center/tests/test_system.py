@@ -173,6 +173,19 @@ def test_camera_detection_raises_event_and_proposal_with_hysteresis(system):
     assert ev.CAMERA_CLEAR in types(system)
 
 
+def test_camera_on_an_already_declared_fire_records_but_does_not_re_propose(system):
+    system.start_fire(CAMERA_ZONE)
+    system.on_sensor_update(sensor_snap(fire=0.8))
+    assert types(system).count(ev.CAMERA_FIRE) == 1          # the detection is still on the timeline
+    assert system.pending_actions() == []                    # but nothing to confirm: it's already a fire
+    assert ev.ACTION_PROPOSED not in types(system)
+    # Once the zone is cleared, a new detection proposes again.
+    system.clear_zone(CAMERA_ZONE)
+    system.on_sensor_update(sensor_snap(fire=0.1))
+    system.on_sensor_update(sensor_snap(fire=0.8))
+    assert [p["zone"] for p in system.pending_actions()] == [CAMERA_ZONE]
+
+
 def test_camera_confidence_feeds_fused_risk_score():
     sensors = SensorFusionState()
     sensors.update_once(camera_fire_conf=0.0)

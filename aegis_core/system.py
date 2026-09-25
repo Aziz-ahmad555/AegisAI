@@ -184,9 +184,12 @@ class AegisSystem:
             self.bus.publish(Event(ev.CAMERA_FIRE, "vision",
                                    f"{kind} detected on camera watching {zone}",
                                    severity="warning", zone=zone, confidence=round(conf, 2)))
-            self.propose("declare_fire", zone,
-                         f"Camera detected {kind.lower()} in {zone} - declare fire?",
-                         source="vision", confidence=round(conf, 2))
+            # The detection is always recorded; proposing is only useful if
+            # the zone isn't already a declared fire (as reports and sensors do).
+            if self.twin.zone_status.get(zone) != "FIRE":
+                self.propose("declare_fire", zone,
+                             f"Camera detected {kind.lower()} in {zone} - declare fire?",
+                             source="vision", confidence=round(conf, 2))
         elif self._camera_active and conf < CAMERA_OFF:
             self._camera_active = False
             self.bus.publish(Event(ev.CAMERA_CLEAR, "vision",
