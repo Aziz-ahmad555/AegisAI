@@ -1,0 +1,201 @@
+{
+  "generated_at": "2026-09-25T06:42:41+00:00",
+  "environment": {
+    "ultralytics": "8.4.144",
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "device": "cpu",
+    "imgsz": 416
+  },
+  "models": {
+    "fire_smoke": {
+      "status": "measured",
+      "weights": "command_center/fire_smoke_model.pt",
+      "dataset": "Roboflow 'FIRE n SMOKE DETECTION' v1 (CC BY 4.0)",
+      "runs": [
+        {
+          "split": "val",
+          "images": 78,
+          "instances": 138,
+          "precision": 0.752,
+          "recall": 0.509,
+          "f1": 0.607,
+          "mAP50": 0.576,
+          "mAP50_95": 0.279,
+          "per_class": {
+            "Fire": {
+              "precision": 0.755,
+              "recall": 0.508,
+              "f1": 0.607,
+              "mAP50": 0.578,
+              "mAP50_95": 0.282
+            },
+            "Smoke": {
+              "precision": 0.749,
+              "recall": 0.511,
+              "f1": 0.607,
+              "mAP50": 0.575,
+              "mAP50_95": 0.276
+            }
+          }
+        },
+        {
+          "split": "test",
+          "images": 44,
+          "instances": 83,
+          "precision": 0.564,
+          "recall": 0.409,
+          "f1": 0.474,
+          "mAP50": 0.421,
+          "mAP50_95": 0.177,
+          "per_class": {
+            "Fire": {
+              "precision": 0.592,
+              "recall": 0.413,
+              "f1": 0.487,
+              "mAP50": 0.435,
+              "mAP50_95": 0.183
+            },
+            "Smoke": {
+              "precision": 0.536,
+              "recall": 0.405,
+              "f1": 0.462,
+              "mAP50": 0.407,
+              "mAP50_95": 0.171
+            }
+          }
+        }
+      ]
+    },
+    "aerial_pose": {
+      "status": "measured",
+      "weights": "archive/phases/phase7_drone_intelligence/runs/detect/train/weights/best.pt",
+      "dataset": "Roboflow SARD (Search and Rescue Drone) v4",
+      "runs": [
+        {
+          "split": "val",
+          "images": 401,
+          "instances": 1325,
+          "precision": 0.784,
+          "recall": 0.513,
+          "f1": 0.62,
+          "mAP50": 0.573,
+          "mAP50_95": 0.283,
+          "per_class": {
+            "Running": {
+              "precision": 1.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "mAP50": 0.12,
+              "mAP50_95": 0.041
+            },
+            "Walking": {
+              "precision": 0.647,
+              "recall": 0.481,
+              "f1": 0.552,
+              "mAP50": 0.537,
+              "mAP50_95": 0.246
+            },
+            "laying_down": {
+              "precision": 0.802,
+              "recall": 0.877,
+              "f1": 0.838,
+              "mAP50": 0.879,
+              "mAP50_95": 0.514
+            },
+            "not_defined": {
+              "precision": 0.793,
+              "recall": 0.487,
+              "f1": 0.603,
+              "mAP50": 0.56,
+              "mAP50_95": 0.236
+            },
+            "seated": {
+              "precision": 0.776,
+              "recall": 0.755,
+              "f1": 0.765,
+              "mAP50": 0.786,
+              "mAP50_95": 0.404
+            },
+            "stands": {
+              "precision": 0.684,
+              "recall": 0.478,
+              "f1": 0.563,
+              "mAP50": 0.554,
+              "mAP50_95": 0.256
+            }
+          }
+        },
+        {
+          "split": "test",
+          "images": 193,
+          "instances": 619,
+          "precision": 0.775,
+          "recall": 0.501,
+          "f1": 0.608,
+          "mAP50": 0.556,
+          "mAP50_95": 0.274,
+          "per_class": {
+            "Running": {
+              "precision": 1.0,
+              "recall": 0.0,
+              "f1": 0.0,
+              "mAP50": 0.089,
+              "mAP50_95": 0.018
+            },
+            "Walking": {
+              "precision": 0.644,
+              "recall": 0.478,
+              "f1": 0.549,
+              "mAP50": 0.523,
+              "mAP50_95": 0.245
+            },
+            "laying_down": {
+              "precision": 0.814,
+              "recall": 0.847,
+              "f1": 0.83,
+              "mAP50": 0.855,
+              "mAP50_95": 0.48
+            },
+            "not_defined": {
+              "precision": 0.699,
+              "recall": 0.505,
+              "f1": 0.587,
+              "mAP50": 0.543,
+              "mAP50_95": 0.254
+            },
+            "seated": {
+              "precision": 0.81,
+              "recall": 0.719,
+              "f1": 0.762,
+              "mAP50": 0.789,
+              "mAP50_95": 0.43
+            },
+            "stands": {
+              "precision": 0.682,
+              "recall": 0.456,
+              "f1": 0.547,
+              "mAP50": 0.536,
+              "mAP50_95": 0.216
+            }
+          }
+        }
+      ],
+      "training_log_final_epoch": {
+        "epoch": 30,
+        "precision": 0.78385,
+        "recall": 0.51182,
+        "mAP50": 0.57248,
+        "mAP50_95": 0.28269
+      }
+    },
+    "tracking": {
+      "status": "not measured",
+      "reason": "stock COCO-pretrained YOLOv8n/s + ByteTrack; no labelled video in the repo to compute detection or tracking (MOTA/IDF1) metrics on"
+    },
+    "fall_detection": {
+      "status": "not measured",
+      "reason": "rule on YOLOv8n-pose keypoints; no labelled fall/no-fall set in the repo"
+    }
+  }
+}

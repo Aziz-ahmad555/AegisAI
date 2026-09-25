@@ -92,7 +92,7 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 - [x] 5-round tool cap kept; truncated tool calls never run; tool input validated; 60 s client timeout; consulted agents shown as chips on each answer.
 - [x] Conversation memory: last 6 Q/A pairs per login (server-side, bounded); "New conversation" clears it.
 - [x] Groq provider (`AEGISAI_LLM_PROVIDER` = groq | claude | offline; groq is the default when `GROQ_API_KEY` is set) with the same streaming, 5-round cap, memory, fallbacks and injection guard; startup `LLM:` line and chat badge show the active provider.
-- [ ] Every agent answer cites the state it used (zone, reading, timestamp). Agent data already carries zones, readings and ages; making the answer cite them needs a real-API evaluation (no API key available in this environment yet).
+- [x] Evidence citations: every answer lists what its consulted agents reported (source sensor/camera/report/twin, zone, value, time), built from the same data the model received - never model-written; caller text never repeated; works with Groq, Claude and offline. Verified with a real Groq answer.
 
 ## Stage 6 — Frontend redesign & UX
 
@@ -121,7 +121,7 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 - [ ] Retrain fire/smoke with low-light augmentation; before/after metrics table.
 - [ ] Improve aerial recall (more epochs / larger imgsz); publish confusion matrices.
 - [ ] Export to ONNX / OpenVINO for 2–3× faster CPU inference.
-- [ ] Record precision/recall/F1 for every model in the README registry table.
+- [x] Precision/recall/F1/mAP for every model in the README, from a reproducible evaluation run (`command_center/tools/evaluate_models.py` -> `docs/metrics.json`, guarded by a test); held-out test split added; tracking and fall detection honestly marked "not measured" (no labelled data).
 
 ## Stage 9 — Deploy & present
 

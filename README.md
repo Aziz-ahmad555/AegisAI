@@ -19,6 +19,7 @@ AegisAI is a command center that reasons across several signals at once, the way
 - [What it does](#what-it-does)
 - [Architecture](#architecture)
 - [What's real and what's simulated](#whats-real-and-whats-simulated)
+- [Model metrics](#model-metrics)
 - [Run it locally](#run-it-locally)
 - [Deploy it (free)](#deploy-it-free)
 - [Configuration](#configuration)
@@ -83,15 +84,48 @@ flowchart LR
 
 | Part | Status | Detail |
 |---|---|---|
-| Fire/smoke detection | **Real model** | Custom YOLOv8n, mAP50 0.576, trained on a public dataset (CPU). Runs on a live webcam locally. |
+| Fire/smoke detection | **Real model** | Custom YOLOv8n trained on a public dataset (CPU); mAP50 0.576 validation / 0.421 held-out test ([metrics](#model-metrics)). Runs on a live webcam locally. |
 | Object tracking, fall detection | **Real models** | YOLOv8n / YOLOv8n-pose on the live webcam (local only). |
-| Aerial pose detection | **Real model, static images** | Custom YOLOv8n on SARD (mAP50 0.572, recall 0.512). No drone - held-out test photos. |
+| Aerial pose detection | **Real model, static images** | Custom YOLOv8n on SARD; recall 0.513 validation / 0.501 held-out test ([metrics](#model-metrics)). No drone - held-out test photos. |
 | Report parsing | **Real** | spaCy NER + rule engine on whatever text you type. |
 | Evacuation routing | **Real algorithm, modelled building** | Dijkstra over a 10-zone graph of a fictional building. |
 | Sensor telemetry | **Simulated** | A simulator with realistic ramping; the fusion, anomaly and trend logic on top of it is real. |
 | Chat answers | **Real LLM** (Groq / Claude) or **offline** | Agents read live system state; offline mode is keyword routing over the same agents. |
 | Guided scenario | **Scripted inputs, real pipeline** | Sensor ramp, camera confidence and the caller report are scripted; everything downstream is the normal code path. Always labelled **SCENARIO / SIMULATED**. |
 | Hosted demo | **No camera** | Cloud mode hides Live Vision; everything else works. |
+
+---
+
+## Model metrics
+
+Every number below comes from a real Ultralytics validation run that anyone with the datasets can repeat:
+
+```bash
+command_center\venv\Scripts\python.exe command_center\tools\evaluate_models.py
+```
+
+It writes the raw results, including per-class numbers, to [`docs/metrics.json`](docs/metrics.json). The run used Ultralytics 8.4.144 on CPU at imgsz 416; a second run gave identical numbers. Where no labelled evaluation set exists, the table says **not measured** - nothing is estimated or copied from elsewhere.
+
+| Model | Evaluation set | Images / objects | Precision | Recall | F1 | mAP50 | mAP50-95 |
+|---|---|---|---|---|---|---|---|
+| Fire/smoke (custom YOLOv8n) | validation split | 78 / 138 | 0.752 | 0.509 | 0.607 | 0.576 | 0.279 |
+| Fire/smoke (custom YOLOv8n) | **held-out test split** | 44 / 83 | 0.564 | 0.409 | 0.474 | 0.421 | 0.177 |
+| Aerial pose, SARD (custom YOLOv8n) | validation split | 401 / 1325 | 0.784 | 0.513 | 0.620 | 0.573 | 0.283 |
+| Aerial pose, SARD (custom YOLOv8n) | **held-out test split** | 193 / 619 | 0.775 | 0.501 | 0.608 | 0.556 | 0.274 |
+| Object tracking (stock YOLOv8n/s + ByteTrack) | - | - | not measured | not measured | not measured | not measured | not measured |
+| Fall detection (YOLOv8n-pose + posture rule) | - | - | not measured | not measured | not measured | not measured | not measured |
+
+- **How to read it.** Precision is the share of detections that were real. Recall is the share of real objects that were found. F1 = 2PR/(P+R). mAP50 summarises precision and recall over all confidence levels; mAP50-95 also demands tighter boxes. Precision and recall are reported at the confidence level that maximises F1 on each split, not at the app's alert thresholds.
+- **Validation vs test.** Training picked the best checkpoint on the validation split, so validation numbers lean optimistic. The **test split was never used during training** - that's the honest number. The validation results reproduce the figures recorded when the models were trained: fire/smoke mAP50 0.576; aerial precision 0.784, recall 0.512, mAP50 0.572 in the final-epoch training log.
+- **Why "not measured".** Tracking and fall detection use stock COCO-pretrained Ultralytics weights plus AegisAI's own logic: ByteTrack thresholds, and a posture rule on pose keypoints. This repo has no labelled video or fall/no-fall set to score them on. Ultralytics' published COCO benchmark measures the stock detector on COCO, not this pipeline, so it isn't quoted as if it were.
+- **Weak classes.** In the aerial model, `Running` has 0 recall on both splits: it is never detected, and its precision of 1.0 only means it made no predictions at all. `laying_down` is the strongest class, with recall 0.85-0.88, which is the pose that matters most for finding injured people.
+
+### What these numbers mean for AEGIS
+
+- **Nothing a model sees changes the building on its own.** A camera detection only creates a *proposal* ("declare fire in Room201?"), and an operator must confirm it before the digital twin, routes or agents treat it as a fire. The numbers above are why that gate exists.
+- **Fire/smoke: an early-warning input, not an alarm.** Test recall of 0.409 means the camera misses more than half of the labelled fire/smoke regions in unseen images, and a 44-image test set is too small to pin that down precisely. AEGIS therefore fuses the camera with sensor telemetry, where agreement between the two raises the risk score. The camera is never the only line of defence, and a real building's certified fire alarm remains the authority.
+- **Aerial recall of 0.512 (0.501 on test) is acceptable only with human confirmation.** The model finds about half of the people in an aerial image. Its precision of about 0.78 means most of what it marks is a real person, so each detection is a useful lead for a human searcher. But a missed person is the most dangerous error in search and rescue, and roughly one in two is missed. So AEGIS presents aerial detections as leads for an operator to check, never as a head count and never as "area clear". A human reviews every image, and the absence of a detection proves nothing.
+- **What would change this.** More and more varied training data, especially low-light fire, aerial `Running` and small distant people. Also an evaluation set recorded in the target environment, and labelled video to finally measure tracking and fall detection. Retraining is deliberately out of scope for now; see [ROADMAP.md](ROADMAP.md).
 
 ---
 
@@ -199,7 +233,7 @@ GitHub Actions runs ruff and the full suite on every push, using the cloud requi
 
 - **Single building, single process.** One modelled building; live state lives in memory, so it runs as one worker and resets on restart. Multi-site or multi-worker would need Redis and persistent storage.
 - **Simulated sensors.** Telemetry comes from a simulator, not real hardware.
-- **Model accuracy.** Fire/smoke mAP50 is 0.576 and weaker in low light (daylight-skewed training data). Aerial recall is 0.512 - it misses about half the people, so treat detections as leads, not counts.
+- **Model accuracy.** Fire/smoke mAP50 is 0.576 on validation but 0.421 on the small held-out test set, and weaker in low light (daylight-skewed training data). Aerial recall is about 0.5 - it misses about half the people, so treat detections as leads, not counts. See [Model metrics](#model-metrics).
 - **Fall detection** needs the full body in frame; a desk-height laptop webcam often can't see the hips.
 - **Offline chat** is keyword routing - it answers from the right agents but can't reason across a nuanced question the way the LLM does.
 - **Free hosting** sleeps when idle, and there's no camera there.
@@ -230,9 +264,9 @@ AegisAI/
   aegis_core/          domain logic (installable): twin + routing, fusion, NLP, event bus,
                        agents + LLM coordinator, vision pipeline, guided scenario
   command_center/      Flask + Socket.IO app: templates, static (design system, vendored libs),
-                       tests (255), tools (detection diagnostic)
+                       tests, tools (detection diagnostic, model evaluation)
   archive/phases/      how it was built: 11 phase snapshots, per-phase instructions, training pipelines
-  docs/images/         README screenshots and the scenario GIF
+  docs/                README screenshots, scenario GIF, metrics.json (model evaluation results)
   Dockerfile, render.yaml, ROADMAP.md
 ```
 
