@@ -229,7 +229,7 @@ All settings are environment variables; `command_center/.env.example` documents 
 
 ```powershell
 pip install -r command_center/requirements-dev.txt
-python -m pytest          # from the repo root - 255 tests
+python -m pytest          # from the repo root - 305 tests
 ruff check aegis_core command_center
 ```
 
