@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Emergency Nexus - design system
+   Aegis Command - design system
    Dark mission-control: graphite surfaces, amber for interaction/brand.
    RED IS RESERVED FOR DANGER (critical risk, declared fire, blocked routes,
    isolated zones, critical events). Everything else uses neutral, amber or
@@ -169,7 +169,6 @@ a { color: var(--accent); }
     text-transform: uppercase; color: var(--text-dim); display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
 }
 .card-title .hint { font-family: var(--font-sans); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text-faint); }
-.card-title .btn { font: 500 var(--fs-sm) var(--font-sans); text-transform: none; letter-spacing: 0; }
 .card.is-danger { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset; }
 
 /* ---------- stats --------------------------------------------------------------------- */

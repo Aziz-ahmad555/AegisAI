@@ -540,7 +540,7 @@ if __name__ == "__main__":
 
     init_agents(AegisSystem(BuildingDigitalTwin(), SensorFusionState()))
     active, description = get_llm()
-    print("Emergency Nexus Multi-Agent Command Coordinator (standalone: fresh, empty system state)")
+    print("AegisAI Multi-Agent Command Coordinator (standalone: fresh, empty system state)")
     print(f"LLM: {description}")
     print("Ask questions. The coordinator will consult only the relevant specialist agents. Type 'quit' to exit.\n")
 

@@ -3,14 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Emergency Nexus - Sign in</title>
+    <title>Aegis Command - Sign in</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/aegis.css') }}">
 </head>
 <body>
 <main class="login-page">
     <section class="card login-box" aria-labelledby="login-title">
-        <div class="brand-mark"><span class="brand-dot"></span><h1 id="login-title" style="margin: 0; font-size: var(--fs-lg);">Emergency Nexus</h1></div>
-        <div class="brand-sub">AI COMMAND CENTER</div>
+        <div class="brand-mark"><span class="brand-dot"></span><h1 id="login-title" style="margin: 0; font-size: var(--fs-lg);">Aegis</h1></div>
+        <div class="brand-sub">EMERGENCY INTELLIGENCE</div>
 
         <form method="POST" novalidate>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

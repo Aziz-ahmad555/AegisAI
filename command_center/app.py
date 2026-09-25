@@ -279,7 +279,7 @@ def api_incident_report():
     # downloaded as a Markdown file.
     now = time.time()
     body = build_incident_report(system, scenario.state(), now=now)
-    filename = time.strftime("emergency-nexus-incident-%Y%m%d-%H%M%S.md", time.localtime(now))
+    filename = time.strftime("aegis-incident-%Y%m%d-%H%M%S.md", time.localtime(now))
     return Response(body, mimetype="text/markdown", headers={
         "Content-Disposition": f'attachment; filename="{filename}"',
         "Cache-Control": "no-store",
@@ -585,7 +585,7 @@ _broadcaster_thread.start()
 
 
 if __name__ == "__main__":
-    print("Emergency Nexus - AI Command Center")
+    print("AegisAI Command Center")
     if credentials.uses_default_password:
         print(f"Login: {credentials.username} / {security.DEFAULT_PASSWORD}  (local demo default)")
     else:
