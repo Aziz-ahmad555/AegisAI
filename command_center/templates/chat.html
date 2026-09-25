@@ -59,8 +59,39 @@
     function startAnswer() {
         var msg = bubble("coordinator");
         msg.innerHTML = '<div class="msg-agents"></div><div class="msg-body"><span class="typing">Consulting agents&hellip;</span></div>' +
+                        '<details class="msg-evidence" open hidden><summary></summary><ul class="ev-list"></ul></details>' +
                         '<div class="msg-notice"></div><div class="msg-meta"></div>';
-        current = { el: msg, body: msg.querySelector(".msg-body"), agents: [], started: false };
+        current = { el: msg, body: msg.querySelector(".msg-body"), agents: [], started: false, evidence: 0 };
+    }
+
+    // Citations come from the agents' own data (never from model text) and
+    // are inserted with textContent only.
+    function addEvidence(c, ev) {
+        var box = c.el.querySelector(".msg-evidence");
+        var list = box.querySelector(".ev-list");
+        (ev.items || []).forEach(function (it) {
+            var li = document.createElement("li");
+            li.className = "ev";
+            [["ev-src", it.source], ["ev-zone", it.zone], ["ev-val", it.value], ["ev-time", it.time]].forEach(function (p) {
+                var span = document.createElement("span");
+                span.className = p[0];
+                span.textContent = p[1] == null ? "" : String(p[1]);
+                li.appendChild(span);
+            });
+            li.firstChild.setAttribute("data-src", it.source);
+            li.title = ev.agent + " agent";
+            list.appendChild(li);
+            c.evidence += 1;
+        });
+        box.querySelector("summary").textContent = "Evidence consulted · " + c.evidence;
+        box.hidden = c.evidence === 0;
+    }
+
+    function clearEvidence(c) {
+        var box = c.el.querySelector(".msg-evidence");
+        box.querySelector(".ev-list").innerHTML = "";
+        c.evidence = 0;
+        box.hidden = true;
     }
 
     function setBusy(busy) {
@@ -87,6 +118,10 @@
                 chip.textContent = ev.agent + " agent";
                 c.el.querySelector(".msg-agents").appendChild(chip);
             }
+        } else if (ev.type === "evidence") {
+            addEvidence(c, ev);
+        } else if (ev.type === "reset") {
+            clearEvidence(c);
         } else if (ev.type === "notice") {
             c.el.querySelector(".msg-notice").textContent = ev.text;
         } else if (ev.type === "mode") {

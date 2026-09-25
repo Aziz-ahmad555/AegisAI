@@ -290,11 +290,11 @@ def api_chat():
     error = _question_error(question)
     if error:
         return jsonify({"error": error[0]}), error[1]
-    answer = coordinator.ask_coordinator(question, llm_client, _chat_history())
+    answer, evidence = coordinator.answer_with_evidence(question, llm_client, _chat_history())
     _remember_turn(question, answer)
     mode = "llm" if llm_client else "offline"
     provider = llm_client.describe() if llm_client else LLM_DESCRIPTION
-    return jsonify({"answer": answer, "mode": mode, "provider": provider})
+    return jsonify({"answer": answer, "mode": mode, "provider": provider, "evidence": evidence})
 
 
 # --- chat memory ---------------------------------------------------------------
@@ -498,6 +498,7 @@ def handle_chat_ask(data):
                 if event["type"] == "reset":
                     chunks = []
                     push_html()
+                    socketio.emit("chat_event", {"type": "reset"}, to=sid)   # clears evidence too
                     continue
                 socketio.emit("chat_event", event, to=sid)
             push_html()                   # final, complete render

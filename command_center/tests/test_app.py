@@ -141,6 +141,29 @@ def test_chat_streams_to_the_asker_and_remembers_the_conversation(client, monkey
     other.disconnect()
 
 
+def test_chat_forwards_evidence_over_the_socket_and_api(client, monkeypatch):
+    from fakes import claude, text, tool
+
+    monkeypatch.setattr(aegis, "llm_client", claude([
+        ("tool_use", [tool("consult_fire_agent")]),
+        ("end_turn", [text("No fire declared.")]),
+    ]))
+    login(client)
+    sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)
+    sio.get_received()
+    sio.emit("chat_ask", {"question": "Is there a fire?"})
+    events = _collect_chat(sio)
+    evidence = [e for e in events if e["type"] == "evidence"]
+    assert [e["agent"] for e in evidence] == ["Fire"]
+    assert {"source", "zone", "value", "time"} == set(evidence[0]["items"][0])
+    sio.disconnect()
+
+    monkeypatch.setattr(aegis, "llm_client", None)       # offline: /api/chat returns evidence too
+    body = api_post(client, "/api/chat", {"question": "Is there a fire?"}).get_json()
+    assert [e["agent"] for e in body["evidence"]] == ["Fire"]
+    assert body["evidence"][0]["items"][0]["value"] == "no declared fires"
+
+
 def test_chat_socket_rejects_oversized_question(client):
     login(client)
     sio = aegis.socketio.test_client(aegis.app, flask_test_client=client)

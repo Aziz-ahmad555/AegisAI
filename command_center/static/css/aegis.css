@@ -358,6 +358,22 @@ label.lbl { display: block; margin-bottom: 6px; font-size: var(--fs-sm); color: 
 .msg-notice { margin-top: var(--s2); font-size: var(--fs-sm); color: var(--accent); }
 .msg-meta { margin-top: var(--s2); font: 12px var(--font-mono); color: var(--text-faint); }
 .msg-agents:empty, .msg-notice:empty, .msg-meta:empty { display: none; }
+/* Evidence consulted: deterministic citations under each answer */
+.msg-evidence { margin-top: var(--s3); border-top: 1px solid var(--line); padding-top: var(--s2); white-space: normal; }
+.msg-evidence summary { cursor: pointer; font: 500 var(--fs-xs) var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.msg-evidence summary:hover { color: var(--text-dim); }
+.ev-list { list-style: none; margin: var(--s2) 0 0; padding: 0; display: grid; gap: 4px; }
+.ev { display: grid; grid-template-columns: 58px minmax(70px, max-content) 1fr auto; gap: var(--s2); align-items: baseline; font-size: 13px; line-height: 1.4; }
+.ev-src { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--info); }
+.ev-src[data-src="report"] { color: var(--text-dim); }
+.ev-src[data-src="twin"] { color: var(--ok); }
+.ev-zone { font-weight: 600; color: var(--text); }
+.ev-val { color: var(--text-dim); min-width: 0; overflow-wrap: anywhere; }
+.ev-time { font: 12px var(--font-mono); color: var(--text-faint); }
+@media (max-width: 640px) {
+    .ev { grid-template-columns: 52px 1fr auto; }
+    .ev-val { grid-column: 2 / -1; }
+}
 .typing { color: var(--text-faint); font-style: italic; }
 .chat-input { display: flex; gap: var(--s2); margin-top: var(--s4); }
 .provider { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: var(--radius-sm); font: 500 13px var(--font-mono); border: 1px solid var(--line-strong); }
