@@ -26,6 +26,7 @@ AegisAI is a command center that reasons across several signals at once, the way
 - [Security](#security)
 - [Testing and CI](#testing-and-ci)
 - [Known limitations](#known-limitations)
+- [Future work](#future-work)
 - [Engineering findings](#engineering-findings)
 - [Project structure](#project-structure)
 
@@ -184,6 +185,7 @@ The repo ships a `Dockerfile` (cloud mode: no camera stack, gunicorn threaded wo
 1. Push the repo to GitHub, then in Render: **New + → Blueprint** → pick the repo.
 2. Render generates `AEGISAI_SECRET_KEY`. Fill in `AEGISAI_PASSWORD_HASH` (command above) and, optionally, `GROQ_API_KEY`.
 3. Deploy. The free tier sleeps when idle; the first request after a sleep takes a while.
+4. Pushes to `main` redeploy automatically, but only after the commit's GitHub checks (CI) pass (`autoDeployTrigger: checksPass` in `render.yaml`). A service created by hand rather than from the Blueprint ignores `render.yaml`: set **Settings → Build & Deploy → Auto-Deploy → After CI checks pass** instead.
 
 **Any Docker host:**
 ```bash
@@ -246,6 +248,31 @@ GitHub Actions runs ruff and the full suite on every push, using the cloud requi
 - **Offline chat** is keyword routing - it answers from the right agents but can't reason across a nuanced question the way the LLM does.
 - **Free hosting** sleeps when idle, and there's no camera there.
 - **Not a certified safety system.** A portfolio project that demonstrates the architecture; it is not a replacement for a fire alarm system.
+
+---
+
+## Future work
+
+**AEGIS v1.0 is feature-complete.** None of the items below exist yet; they are documented here and in [ROADMAP.md](ROADMAP.md) as future work.
+
+**System**
+- **Per-room people tracking.** Keep trapped/occupant counts per zone, so the Medical agent and route priority can use them. Today, people counts come only from individual caller reports.
+- **Multi-zone fire scenario**, to go with the four existing scenarios.
+- **PDF incident report**, alongside the existing Markdown export.
+
+**Frontend**
+- **Light theme** toggle. The UI is dark-only by design for now.
+- **Command palette** (Ctrl+K) for navigation and quick actions.
+- **Micro-interactions**: animated risk gauges, smooth graph transitions, animated route paths.
+
+**Models** (retraining deliberately deferred)
+- **Retrain fire/smoke** with low-light augmentation, and publish a before/after metrics table.
+- **Improve aerial recall** (currently about 0.5), and publish confusion matrices. The `Running` class is never detected.
+- **Measure tracking and fall detection**, which needs labelled video and a fall/no-fall set; both are "not measured" today.
+- **ONNX / OpenVINO export** for faster CPU inference.
+
+**Presentation**
+- A **short demo video**, to go with the scenario GIF.
 
 ---
 

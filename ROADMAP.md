@@ -4,6 +4,8 @@ Goal: turn AegisAI from a set of well-built phase demos into **one connected, fa
 
 Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
+> **Status (2026-09-25): AEGIS v1.0 is feature-complete.** The unchecked items below are documented future work, not in progress. See [README: Future work](README.md#future-work).
+
 ---
 
 ## Stage 0 — Performance & responsiveness (do first: it's what users feel)
