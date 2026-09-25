@@ -1,12 +1,14 @@
-# AegisAI
+# Emergency Nexus: AI Command Center for Crisis Response
 ### Multimodal emergency intelligence for buildings - detection, fusion, evacuation routing and an agent-driven command chat
 
 [![CI](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml/badge.svg)](https://github.com/Aziz-ahmad555/AegisAI/actions/workflows/ci.yml)
 
+*Formerly codenamed AEGIS; internal package and setting names still use aegis.*
+
 **Live demo: https://aegisai-9aki.onrender.com**
 *Hosted on Render's free tier - if it has been idle, the first load can take up to a minute while it wakes up. Demo login available on request. The hosted version has no camera, so Live Vision is local-only; everything else, including the guided scenario, works.*
 
-AegisAI is a command center that reasons across several signals at once, the way a real campus or smart-building control room would: camera fire/smoke detection, IoT-style sensor telemetry, free-text caller reports and a live digital twin of the building. Evidence is fused into a risk picture, the system *proposes* actions (a human confirms them), evacuation routes recompute around hazards, and a decision agent answers operator questions from live data.
+Emergency Nexus is a command center that reasons across several signals at once, the way a real campus or smart-building control room would: camera fire/smoke detection, IoT-style sensor telemetry, free-text caller reports and a live digital twin of the building. Evidence is fused into a risk picture, the system *proposes* actions (a human confirms them), evacuation routes recompute around hazards, and a decision agent answers operator questions from live data.
 
 ![Guided scenario: sensors rise, the camera confirms smoke, a caller reports fire, the fire is confirmed, routes recompute and the agents brief the operator](docs/images/scenario.gif)
 
@@ -126,14 +128,14 @@ It writes the raw results, including per-class numbers, to [`docs/metrics.json`]
 
 - **How to read it.** Precision is the share of detections that were real. Recall is the share of real objects that were found. F1 = 2PR/(P+R). mAP50 summarises precision and recall over all confidence levels; mAP50-95 also demands tighter boxes. Precision and recall are reported at the confidence level that maximises F1 on each split, not at the app's alert thresholds.
 - **Validation vs test.** Training picked the best checkpoint on the validation split, so validation numbers lean optimistic. The **test split was never used during training** - that's the honest number. The validation results reproduce the figures recorded when the models were trained: fire/smoke mAP50 0.576; aerial precision 0.784, recall 0.512, mAP50 0.572 in the final-epoch training log.
-- **Why "not measured".** Tracking and fall detection use stock COCO-pretrained Ultralytics weights plus AegisAI's own logic: ByteTrack thresholds, and a posture rule on pose keypoints. This repo has no labelled video or fall/no-fall set to score them on. Ultralytics' published COCO benchmark measures the stock detector on COCO, not this pipeline, so it isn't quoted as if it were.
+- **Why "not measured".** Tracking and fall detection use stock COCO-pretrained Ultralytics weights plus Emergency Nexus's own logic: ByteTrack thresholds, and a posture rule on pose keypoints. This repo has no labelled video or fall/no-fall set to score them on. Ultralytics' published COCO benchmark measures the stock detector on COCO, not this pipeline, so it isn't quoted as if it were.
 - **Weak classes.** In the aerial model, `Running` has 0 recall on both splits: it is never detected, and its precision of 1.0 only means it made no predictions at all. `laying_down` is the strongest class, with recall 0.85-0.88, which is the pose that matters most for finding injured people.
 
-### What these numbers mean for AEGIS
+### What these numbers mean for Emergency Nexus
 
 - **Nothing a model sees changes the building on its own.** A camera detection only creates a *proposal* ("declare fire in Room201?"), and an operator must confirm it before the digital twin, routes or agents treat it as a fire. The numbers above are why that gate exists.
-- **Fire/smoke: an early-warning input, not an alarm.** Test recall of 0.409 means the camera misses more than half of the labelled fire/smoke regions in unseen images, and a 44-image test set is too small to pin that down precisely. AEGIS therefore fuses the camera with sensor telemetry, where agreement between the two raises the risk score. The camera is never the only line of defence, and a real building's certified fire alarm remains the authority.
-- **Aerial recall of 0.512 (0.501 on test) is acceptable only with human confirmation.** The model finds about half of the people in an aerial image. Its precision of about 0.78 means most of what it marks is a real person, so each detection is a useful lead for a human searcher. But a missed person is the most dangerous error in search and rescue, and roughly one in two is missed. So AEGIS presents aerial detections as leads for an operator to check, never as a head count and never as "area clear". A human reviews every image, and the absence of a detection proves nothing.
+- **Fire/smoke: an early-warning input, not an alarm.** Test recall of 0.409 means the camera misses more than half of the labelled fire/smoke regions in unseen images, and a 44-image test set is too small to pin that down precisely. Emergency Nexus therefore fuses the camera with sensor telemetry, where agreement between the two raises the risk score. The camera is never the only line of defence, and a real building's certified fire alarm remains the authority.
+- **Aerial recall of 0.512 (0.501 on test) is acceptable only with human confirmation.** The model finds about half of the people in an aerial image. Its precision of about 0.78 means most of what it marks is a real person, so each detection is a useful lead for a human searcher. But a missed person is the most dangerous error in search and rescue, and roughly one in two is missed. So Emergency Nexus presents aerial detections as leads for an operator to check, never as a head count and never as "area clear". A human reviews every image, and the absence of a detection proves nothing.
 - **What would change this.** More and more varied training data, especially low-light fire, aerial `Running` and small distant people. Also an evaluation set recorded in the target environment, and labelled video to finally measure tracking and fall detection. Retraining is deliberately out of scope for now; see [ROADMAP.md](ROADMAP.md).
 
 ---
@@ -253,7 +255,7 @@ GitHub Actions runs ruff and the full suite on every push, using the cloud requi
 
 ## Future work
 
-**AEGIS v1.0 is feature-complete.** None of the items below exist yet; they are documented here and in [ROADMAP.md](ROADMAP.md) as future work.
+**Emergency Nexus v1.0 is feature-complete.** None of the items below exist yet; they are documented here and in [ROADMAP.md](ROADMAP.md) as future work.
 
 **System**
 - **Per-room people tracking.** Keep trapped/occupant counts per zone, so the Medical agent and route priority can use them. Today, people counts come only from individual caller reports.

@@ -32,6 +32,20 @@ def test_pages_share_design_system_and_status_bar(authed, path):
     assert 'id="threat-level"' in html and "js/status.js" in html
 
 
+@pytest.mark.parametrize("path", PAGES)
+def test_pages_show_the_emergency_nexus_brand(authed, path):
+    html = authed.get(path).get_data(as_text=True)
+    assert "<title>Emergency Nexus</title>" in html
+    assert "<h1>Emergency Nexus</h1>" in html and "AI COMMAND CENTER" in html
+    assert ">Aegis<" not in html and "EMERGENCY INTELLIGENCE" not in html
+
+
+def test_login_page_shows_the_brand(client):
+    html = client.get("/login").get_data(as_text=True)
+    assert "<title>Emergency Nexus - Sign in</title>" in html
+    assert ">Emergency Nexus</h1>" in html and "AI COMMAND CENTER" in html
+
+
 def test_login_page_is_self_contained_too(client):
     html = client.get("/login").get_data(as_text=True)
     assert "css/aegis.css" in html and "fonts.googleapis" not in html

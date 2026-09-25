@@ -56,8 +56,8 @@ def build_incident_report(system, scenario_state=None, now=None, limit=200):
     pending = system.pending_actions()
     scenario_active = bool(scenario_state and scenario_state.get("active"))
 
-    out = ["# AegisAI incident report", ""]
-    out.append(f"Generated {_stamp(now)} (local time) by the AegisAI command center. "
+    out = ["# Emergency Nexus incident report", ""]
+    out.append(f"Generated {_stamp(now)} (local time) by the Emergency Nexus command center. "
                "Built from the system's own records; no part of this report is written by an AI model "
                "except where a section says so.")
     out.append("")
@@ -152,5 +152,5 @@ def build_incident_report(system, scenario_state=None, now=None, limit=200):
                             md_escape(e["message"]), conf))
     else:
         out.append("No events recorded since the last reset.")
-    out += ["", "---", "", "*AegisAI is a portfolio demonstration, not a certified safety system.*", ""]
+    out += ["", "---", "", "*Emergency Nexus is a portfolio demonstration, not a certified safety system.*", ""]
     return "\n".join(out)

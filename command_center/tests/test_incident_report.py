@@ -32,7 +32,7 @@ def section(md, title):
 
 def test_empty_system_report_is_complete_and_says_so(system):
     md = build_incident_report(system)
-    for heading in ("# AegisAI incident report", "## Summary", "## Decisions", "## Caller reports",
+    for heading in ("# Emergency Nexus incident report", "## Summary", "## Decisions", "## Caller reports",
                     "## Evacuation routes (at time of export)", "## Timeline"):
         assert heading in md
     assert "- **Declared fires:** none" in md
@@ -119,9 +119,9 @@ def test_download_is_a_markdown_attachment(client):
     r = client.get("/api/incident-report.md")
     assert r.status_code == 200
     assert r.mimetype == "text/markdown"
-    assert r.headers["Content-Disposition"].startswith('attachment; filename="aegis-incident-')
+    assert r.headers["Content-Disposition"].startswith('attachment; filename="emergency-nexus-incident-')
     assert r.headers["Cache-Control"] == "no-store"
-    assert r.get_data(as_text=True).startswith("# AegisAI incident report")
+    assert r.get_data(as_text=True).startswith("# Emergency Nexus incident report")
 
 
 def test_pages_offer_the_export(client):
