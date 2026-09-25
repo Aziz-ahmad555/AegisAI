@@ -13,7 +13,8 @@ from aegis_core import coordinator
 from aegis_core.building_state import BuildingDigitalTwin
 from aegis_core.coordinator import init_agents
 from aegis_core.emergency_nlp import parse_emergency_report
-from aegis_core.scenario import ScenarioRunner
+from aegis_core.incident_report import build_incident_report
+from aegis_core.scenario import SCENARIOS, ScenarioRunner
 from aegis_core.sensor_state import SensorFusionState
 from aegis_core.system import AegisSystem
 
@@ -93,6 +94,7 @@ def inject_template_globals():
         # Only advertise the built-in demo login when it's actually in use.
         "show_default_login": not CLOUD_MODE and credentials.uses_default_password,
         "llm_label": llm_client.describe() if llm_client else "offline",
+        "scenarios": ScenarioRunner.catalog(),
     }
 
 
@@ -268,6 +270,20 @@ def api_analyze_report():
 @login_required
 def api_timeline():
     return jsonify({"events": system.bus.timeline(limit=100), "pending_actions": system.pending_actions()})
+
+
+@app.route("/api/incident-report.md")
+@login_required
+def api_incident_report():
+    # Built by code from the timeline, reports, decisions and routes (no LLM),
+    # downloaded as a Markdown file.
+    now = time.time()
+    body = build_incident_report(system, scenario.state(), now=now)
+    filename = time.strftime("aegis-incident-%Y%m%d-%H%M%S.md", time.localtime(now))
+    return Response(body, mimetype="text/markdown", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store",
+    })
 
 
 @app.route("/api/actions/<int:proposal_id>", methods=["POST"])
@@ -517,13 +533,21 @@ def handle_scenario_command(data):
     if not session.get("logged_in"):
         disconnect()
         return
-    action = (data or {}).get("action")
+    data = data or {}
+    action = data.get("action")
     commands = {"start": scenario.start, "pause": scenario.pause, "resume": scenario.resume,
                 "stop": scenario.stop, "reset": scenario.reset}
-    if action in commands:
-        # stop/reset can wait briefly for the worker thread; don't block the
-        # socket handler on it.
-        socketio.start_background_task(commands[action])
+    if action not in commands:
+        return
+    args = ()
+    if action == "start":
+        chosen = data.get("scenario")
+        if chosen is not None and chosen not in SCENARIOS:
+            return
+        args = (chosen,)
+    # stop/reset can wait briefly for the worker thread; don't block the
+    # socket handler on it.
+    socketio.start_background_task(commands[action], *args)
 
 
 @socketio.on("trigger_sensor_event")

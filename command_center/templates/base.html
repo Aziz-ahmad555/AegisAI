@@ -53,7 +53,11 @@
             <a href="/aerial">Aerial Search</a>
         </nav>
         <div class="sidebar-foot">
-            <button class="btn btn-block btn-sm" id="scenario-run" type="button" title="Play a scripted fire incident end to end (simulated data)">Run demo scenario</button>
+            <label class="sc-pick-label" for="scenario-pick">Demo scenario</label>
+            <select class="field field-sm" id="scenario-pick">
+                {% for sc in scenarios %}<option value="{{ sc.id }}" title="{{ sc.summary }}">{{ sc.title }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-block btn-sm" id="scenario-run" type="button" title="Play the selected scripted incident end to end (simulated data)">Run demo scenario</button>
             <a href="/logout" style="display: inline-block; margin-top: var(--s3);">Sign out</a>
         </div>
     </aside>
@@ -83,6 +87,7 @@
         <div class="scenario-banner" id="scenario-banner" role="region" aria-label="Guided scenario" aria-live="polite" hidden>
             <span class="sc-label">SCENARIO &middot; SIMULATED</span>
             <span class="sc-status">Running</span>
+            <span class="sc-title"></span>
             <div class="sc-main">
                 <div class="sc-step">Starting&hellip;</div>
                 <div class="sc-progress" aria-hidden="true"></div>
@@ -91,6 +96,7 @@
             <div class="sc-controls">
                 <button class="btn btn-sm" data-cmd="pause" type="button">Pause</button>
                 <button class="btn btn-sm" data-cmd="stop" type="button">Stop</button>
+                <a class="btn btn-sm" id="sc-export" href="/api/incident-report.md" download hidden>Export report</a>
                 <button class="btn btn-sm btn-primary" data-cmd="reset" type="button">Reset</button>
             </div>
         </div>

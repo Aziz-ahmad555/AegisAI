@@ -452,4 +452,9 @@ label.lbl { display: block; margin-bottom: 6px; font-size: var(--fs-sm); color: 
 .badge-sim { color: var(--info); background: var(--info-soft); border-color: rgba(91, 176, 221, 0.45); }
 .msg-sim { border-color: rgba(91, 176, 221, 0.6); }
 .sidebar-foot .btn { font-size: var(--fs-sm); }
+.sc-pick-label { display: block; margin-bottom: 4px; font: 500 11px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.field-sm { padding: 6px 8px; font-size: var(--fs-sm); }
+#scenario-pick { margin-bottom: var(--s2); }
+.sc-title { font-size: var(--fs-sm); color: var(--text-dim); }
+@media (max-width: 900px) { .sc-pick-label { display: none; } #scenario-pick { width: auto; margin: 0 0 4px; } }
 @media (max-width: 900px) { .scenario-banner { top: 0; padding: var(--s3) var(--s4); } }

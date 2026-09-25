@@ -35,8 +35,13 @@ import pytest  # noqa: E402
 @pytest.fixture
 def client():
     """Flask test client on a clean slate: no rate-limit history, empty twin."""
+    from aegis_core import coordinator
+
     import app as aegis
 
+    # Other test modules point the (module-global) agents at their own
+    # systems; the app's agents must read the app's system.
+    coordinator.init_agents(aegis.system)
     aegis.app.config["TESTING"] = True
     aegis.login_limiter.reset()
     c = aegis.app.test_client()

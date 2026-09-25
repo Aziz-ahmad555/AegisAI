@@ -6,10 +6,11 @@
     if (!socket) return;
     var banner = document.getElementById("scenario-banner");
     var runBtn = document.getElementById("scenario-run");
+    var pick = document.getElementById("scenario-pick");
     var last = null;
 
-    function cmd(action) { socket.emit("scenario_command", { action: action }); }
-    if (runBtn) runBtn.onclick = function () { cmd("start"); };
+    function cmd(action, extra) { socket.emit("scenario_command", Object.assign({ action: action }, extra || {})); }
+    if (runBtn) runBtn.onclick = function () { cmd("start", pick ? { scenario: pick.value } : null); };
     banner.querySelector('[data-cmd="pause"]').onclick = function () { cmd(last && last.status === "paused" ? "resume" : "pause"); };
     banner.querySelector('[data-cmd="stop"]').onclick = function () { cmd("stop"); };
     banner.querySelector('[data-cmd="reset"]').onclick = function () { cmd("reset"); };
@@ -20,9 +21,15 @@
         last = st;
         banner.hidden = !st.active;
         document.body.classList.toggle("is-simulated", !!st.active);
-        if (runBtn) runBtn.disabled = st.status === "running" || st.status === "paused";
+        var busy = st.status === "running" || st.status === "paused";
+        if (runBtn) runBtn.disabled = busy;
+        if (pick) {
+            pick.disabled = busy;
+            if (st.active && st.scenario) pick.value = st.scenario;
+        }
         if (!st.active) return;
 
+        banner.querySelector(".sc-title").textContent = (st.title || "") + (st.zone ? " · " + st.zone : "");
         var total = st.steps.length;
         var current = st.step >= 0 ? st.steps[Math.min(st.step, total - 1)].title : "Starting";
         banner.querySelector(".sc-status").textContent = labels[st.status] || st.status;
@@ -43,6 +50,8 @@
         pause.textContent = st.status === "paused" ? "Resume" : "Pause";
         pause.disabled = st.status !== "running" && st.status !== "paused";
         banner.querySelector('[data-cmd="stop"]').disabled = pause.disabled;
+        // Once the run has ended, the incident can be exported as Markdown.
+        banner.querySelector("#sc-export").hidden = st.status !== "finished" && st.status !== "stopped";
     }
 
     socket.on("scenario_state", function (st) {

@@ -112,9 +112,9 @@ That check also exposed that **unauthenticated sockets stayed connected** under 
 ## Stage 7 — Demo experience
 
 - [x] **Guided scenario mode** — 'Run demo scenario' plays a scripted incident through the real modules (sensor ramp → simulated camera → caller report → proposal with visible countdown/auto-confirm → twin + rerouting → agents' briefing); always labelled SCENARIO / SIMULATED; Pause/Resume, Stop, Reset; works in offline LLM mode.
-- [ ] Scenario library: kitchen fire, blocked stairwell, medical emergency, multi-zone fire. *(one scenario so far)*
+- [x] Scenario library: corridor fire, kitchen fire, smoke-logged stairwell, medical emergency. Chosen from the sidebar; routes are compared with the pre-incident routes, so reroutes are reported. *(Multi-zone fire not yet.)*
 - [x] Reset-to-baseline (fires, proposals, reports, sensors and camera back to normal).
-- [ ] Incident report export (PDF/Markdown) summarizing a scenario.
+- [x] Incident report export (Markdown): summary, decisions, caller reports, current routes and the timeline since the last reset, built by code with every external string escaped; labelled SIMULATED for scenario data. *(PDF not yet.)*
 
 ## Stage 8 — Models (optional, longer)
 

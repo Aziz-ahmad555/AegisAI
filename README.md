@@ -10,7 +10,7 @@ AegisAI is a command center that reasons across several signals at once, the way
 
 ![Guided scenario: sensors rise, the camera confirms smoke, a caller reports fire, the fire is confirmed, routes recompute and the agents brief the operator](docs/images/scenario.gif)
 
-*The guided demo scenario (every step is labelled SIMULATED). Recorded in offline mode - no LLM key needed.*
+*The corridor-fire demo scenario (every step is labelled SIMULATED). Recorded in offline mode - no LLM key needed.*
 
 ---
 
@@ -37,11 +37,19 @@ AegisAI is a command center that reasons across several signals at once, the way
 |---|---|
 | **Operating picture** - one threat level for the building (always on screen), active incidents first, and a live incident timeline across every module. | ![Overview during an incident](docs/images/overview-scenario.png) |
 | **Digital twin** - the building as a graph; declared fires block connections and Dijkstra routing recomputes an exit for every room, flagging rooms that must leave through their own hazard zone and rooms that are fully isolated. | ![Digital twin with a fire and an isolated room](docs/images/twin-fire.png) |
-| **Command chat** - a decision agent (Groq or Claude, with an offline fallback) consults Fire, Medical and Route agents that read live state, and answers with what the data shows - unknowns stay unknown, caller text is treated as untrusted. | ![Command chat with an agent briefing](docs/images/chat-briefing.png) |
+| **Command chat** - a decision agent (Groq or Claude, with an offline fallback) consults Fire, Medical and Route agents that read live state, and answers with what the data shows - unknowns stay unknown, caller text is treated as untrusted. Every answer lists the evidence it used (source, zone, value, time), built from the agents' data rather than written by the model. | ![Command chat with an agent briefing](docs/images/chat-briefing.png) |
 | **Sensor fusion** - temperature, smoke and gas readings fused with camera confidence into one 0-100 risk score, with z-score anomaly detection and trend forecasting. Sensors alone top out at HIGH; CRITICAL needs the camera to agree. | ![Sensor fusion page](docs/images/sensors.png) |
 | **Report analyzer** - spaCy entities plus domain rules extract event type, severity (incl. downplayed language), people counts and locations; a fire report that names a zone proposes a fire declaration. | ![Report analyzer](docs/images/report-analyzer.png) |
 
 Also: **Live Vision** (local only - YOLOv8 tracking, the custom fire/smoke model and pose-based fall detection on a webcam, ~120 ms camera-to-screen) and **Aerial Search** (pose classification on search-and-rescue drone imagery).
+
+**Demo scenarios.** Four scripted incidents, picked in the sidebar and played through the real modules:
+- **Corridor fire:** sensors, camera and a caller all agree, and a room is cut off.
+- **Kitchen fire:** the camera leads, and the sensors are in another zone.
+- **Smoke-logged stairwell:** the stairwell closes and every route is re-checked.
+- **Medical emergency:** there's no fire, so nothing is proposed, and the agents give the responders' route.
+
+**Incident report.** *Export report* on the Overview, or on the scenario banner once a run ends, downloads a Markdown report. It covers the summary, decisions, caller reports, current routes and the full timeline, and is built by code rather than by a model. The only model text in it is the scenario briefing, in a section labelled AI-generated.
 
 **Human in the loop.** Automated evidence - a camera detection, CRITICAL sensors, a caller's report - only ever *proposes* "declare fire?". An operator confirms or dismisses it; the guided scenario auto-confirms after a visible countdown, and says so.
 
@@ -91,7 +99,7 @@ flowchart LR
 | Evacuation routing | **Real algorithm, modelled building** | Dijkstra over a 10-zone graph of a fictional building. |
 | Sensor telemetry | **Simulated** | A simulator with realistic ramping; the fusion, anomaly and trend logic on top of it is real. |
 | Chat answers | **Real LLM** (Groq / Claude) or **offline** | Agents read live system state; offline mode is keyword routing over the same agents. |
-| Guided scenario | **Scripted inputs, real pipeline** | Sensor ramp, camera confidence and the caller report are scripted; everything downstream is the normal code path. Always labelled **SCENARIO / SIMULATED**. |
+| Guided scenarios | **Scripted inputs, real pipeline** | Sensor ramp, camera confidence and caller reports are scripted; everything downstream is the normal code path. Always labelled **SCENARIO / SIMULATED**, and so is an incident report exported from one. |
 | Hosted demo | **No camera** | Cloud mode hides Live Vision; everything else works. |
 
 ---
@@ -143,7 +151,7 @@ pip install -e ..
 python app.py
 ```
 
-Open http://127.0.0.1:5000 and sign in with **operator / aegisai2026** (local demo default). Then press **Run demo scenario** in the sidebar.
+Open http://127.0.0.1:5000 and sign in with **operator / aegisai2026** (local demo default). Then pick a scenario in the sidebar and press **Run demo scenario**.
 
 Live Vision needs the trained fire/smoke weights copied into `command_center/` as `fire_smoke_model.pt` (weights aren't committed - see [Model weights](#model-weights)); the other pages work without them.
 

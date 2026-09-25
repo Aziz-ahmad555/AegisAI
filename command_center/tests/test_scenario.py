@@ -158,3 +158,79 @@ def test_briefing_uses_the_llm_when_available(system):
     runner.start()
     wait_until(lambda: runner.status == FINISHED)
     assert runner.briefing == "**Fire in CorridorB.** Room201 isolated."
+
+
+# --- scenario library -----------------------------------------------------------------------
+
+def test_catalog_lists_every_scenario():
+    ids = [s["id"] for s in ScenarioRunner.catalog()]
+    assert ids == ["corridor_fire", "kitchen_fire", "blocked_stairwell", "medical_emergency"]
+    assert all(s["title"] and s["summary"] for s in ScenarioRunner.catalog())
+
+
+def test_unknown_scenario_is_refused(system):
+    runner, _ = make(system)
+    assert not runner.start("delete_everything")
+    assert runner.status == IDLE
+
+
+def run_scenario(system, scenario_id):
+    runner, states = make(system)
+    assert runner.start(scenario_id)
+    wait_until(lambda: runner.status == FINISHED)
+    return runner, states, [e["message"] for e in system.bus.timeline(limit=200)]
+
+
+def test_kitchen_fire_is_camera_led_and_declares_room102(system):
+    runner, states, msgs = run_scenario(system, "kitchen_fire")
+    assert runner.zone == "Room102" and states[-1]["title"] == "Kitchen fire"
+    assert system.twin.zone_status["Room102"] == "FIRE"
+    assert system.camera_zone() == "Room102"
+    assert system.reports()[0]["zones"] == ["Room102"]
+    assert system.sensors.get_snapshot()["risk_level"] == "NORMAL"      # sensors are elsewhere: not scripted
+    assert system.pending_actions() == []
+    assert any("Routes recomputed around Room102" in m for m in msgs)
+
+
+def test_blocked_stairwell_declares_the_stairwell_and_rechecks_routes(system):
+    runner, _, msgs = run_scenario(system, "blocked_stairwell")
+    assert system.twin.zone_status["Stairwell"] == "FIRE"
+    assert [z for z, s in system.twin.zone_status.items() if s == "FIRE"] == ["Stairwell"]
+    route = next(m for m in msgs if m.startswith("Routes recomputed around Stairwell"))
+    # Honest outcome for this building: every room still has an exit that avoids the stairwell.
+    assert "5 of 5 rooms can still evacuate" in route
+    assert "RouteAgent" in runner.briefing and "FireAgent" in runner.briefing
+
+
+def test_routes_step_reports_rerouted_rooms(system):
+    runner, _ = make(system)
+    runner._routes_before = runner._routes()
+    runner.zone = "ExitMain"
+    system.start_fire("ExitMain")                  # Room202's shortest exit is gone
+    runner._step_routes()
+    msgs = [e["message"] for e in system.bus.timeline(limit=50)]
+    assert "Room202 rerouted: Room202 -> Stairwell -> ExitEmergency (was Room202 -> ExitMain)" in msgs
+    summary = next(m for m in msgs if m.startswith("Routes recomputed around ExitMain"))
+    assert "no room's route passed through" not in summary
+
+
+def test_medical_emergency_proposes_nothing_and_gives_the_responder_route(system):
+    runner, _, msgs = run_scenario(system, "medical_emergency")
+    assert all(s != "FIRE" for s in system.twin.zone_status.values())
+    assert system.pending_actions() == []
+    assert not [e for e in system.bus.timeline(limit=200) if e["type"] == ev.ACTION_PROPOSED]
+    assert system.reports()[0]["event_types"] == ["MEDICAL"]
+    assert any("no twin action is proposed" in m for m in msgs)
+    assert any(m == "Responder access to Room201: ExitMain -> CorridorB -> Room201 (clear)" for m in msgs)
+    assert "MedicalAgent" in runner.briefing and "RouteAgent" in runner.briefing
+    assert "FireAgent" not in runner.briefing                            # no fire question asked
+
+
+@pytest.mark.parametrize("scenario_id", ["kitchen_fire", "blocked_stairwell", "medical_emergency"])
+def test_every_scenario_is_labelled_simulated_and_resets_cleanly(system, scenario_id):
+    runner, _, _ = run_scenario(system, scenario_id)
+    events = [e for e in system.bus.timeline(limit=200) if e["type"] != ev.RESET]
+    assert events and all(e["data"].get("simulated") for e in events)
+    runner.reset()
+    assert all(s != "FIRE" for s in system.twin.zone_status.values())
+    assert system.reports() == [] and system.pending_actions() == []
