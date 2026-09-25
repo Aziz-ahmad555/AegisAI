@@ -40,11 +40,23 @@ NUMBER_WORDS = {
 }
 
 
+# Numbered/lettered spaces ("Room 101", "corridor A", "Gate 4") that spaCy's
+# NER doesn't tag. A single-letter label must be a capital ("corridor A"), so
+# prose like "a room a lot bigger" isn't a place; \b stops "corridor And".
+NAMED_SPACE = re.compile(
+    r"\b((?i:room|corridor|hall|floor|gate|building|stairwell|exit|wing|block))\s*(\d+[A-Za-z]?|[A-Z])\b")
+
+
 def extract_locations(doc, text):
     locations = [ent.text for ent in doc.ents if ent.label_ in ("GPE", "FAC", "LOC")]
 
     text_lower = text.lower()
     matched_spans = []
+
+    for m in NAMED_SPACE.finditer(text):
+        if not any(m.group(0).lower() in loc.lower() for loc in locations):
+            locations.append(m.group(0))
+        matched_spans.append(m.span())
 
     for room in COMMON_ROOM_WORDS:
         idx = text_lower.find(room)

@@ -56,3 +56,25 @@ def test_multiple_room_words_are_all_found():
 def test_original_text_is_preserved():
     text = "Fire <b>in</b> the lobby"
     assert parse(text)["original_text"] == text
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("3 people trapped in Room 101, heavy smoke", ["Room 101"]),
+    ("Fire in room202, two trapped", ["room202"]),
+    ("smoke in corridor A", ["corridor A"]),
+    ("Three people are trapped near Gate 4 in Building 4", ["Gate 4", "Building 4"]),
+])
+def test_numbered_and_lettered_spaces_are_locations(text, expected):
+    locations = parse(text)["locations"]
+    for loc in expected:
+        assert loc in locations
+
+
+@pytest.mark.parametrize("text", [
+    "we need a room a lot bigger",
+    "smoke in the corridor and stairwell",
+    "Someone collapsed on a floor near me",
+])
+def test_prose_is_not_mistaken_for_a_named_space(text):
+    locations = parse(text)["locations"]
+    assert not any(" " in loc and loc.split()[-1].lower() in ("a", "and") for loc in locations), locations
